@@ -38,4 +38,4 @@ Bei Baukasten-Systemen ohne Datei-Upload (z. B. Wix, Jimdo, Squarespace) die App
 <iframe src="https://ADRESSE-DER-APP/" allow="camera" style="width:100%;height:1800px;border:0" title="Würfel-Scanner"></iframe>
 ```
 
-Lizenzen der mitgelieferten Dateien: cube.js/solve.js (MIT, `js/LICENSE-cubejs.txt`), Schriften Chakra Petch, IBM Plex Sans, JetBrains Mono (SIL Open Font License 1.1, `fonts/LICENSE-*.txt`).
+Lizenzen der mitgelieferten Dateien: cube.js/solve.js (MIT, `js/LICENSE-cubejs.txt`), Schriften Teko und Noto Sans (SIL Open Font License 1.1, `fonts/LICENSE-*.txt`).

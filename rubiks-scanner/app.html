@@ -3,62 +3,55 @@
 <!-- fonts:start -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Teko:wght@500;600;700&family=Noto+Sans:wght@400;500;600;700&display=swap">
 <!-- fonts:end -->
 <style>
-/* Layout: a workbench — camera on the left, checklist on the right, then net editor and solution player stacked below. */
+/* Layout: a workbench — camera on the left, checklist on the right, then net editor and solution player stacked below.
+   Look: Manuel Ribis CI — dark surfaces, red accent, Teko headlines in capitals, Noto Sans text. Deliberately dark only. */
 :root {
-  --bg: #eceef2;
-  --surface: #ffffff;
-  --sunken: #e2e5eb;
-  --ink: #14171c;
-  --muted: #59626e;
-  --line: #d3d8e0;
-  --accent: #1d4ed8;
+  --bg: #1b1b1b;
+  --surface: #262626;
+  --sunken: #202020;
+  --ink: #f4f4f4;
+  --text: #c6c6c6;
+  --muted: #8f8f8f;
+  --line: #333333;
+  --ghost: rgba(255, 255, 255, .28);
+  --accent: #e81938;
+  --accent-hover: #c91530;
   --accent-ink: #ffffff;
-  --plastic: #111317;
-  --ok: #17803f;
-  --warn: #a3520a;
-  --err: #c0262d;
-  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
-  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f1115; --surface: #171a20; --sunken: #0b0d10; --ink: #e8ebf0; --muted: #98a1ae;
-    --line: #2a2f38; --accent: #7aa0ff; --accent-ink: #0b0f1a; --plastic: #050608;
-    --ok: #4cc47a; --warn: #f0a04b; --err: #ff6b6f; color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #0f1115; --surface: #171a20; --sunken: #0b0d10; --ink: #e8ebf0; --muted: #98a1ae;
-  --line: #2a2f38; --accent: #7aa0ff; --accent-ink: #0b0f1a; --plastic: #050608;
-  --ok: #4cc47a; --warn: #f0a04b; --err: #ff6b6f; color-scheme: dark;
+  --plastic: #0d0d0d;
+  --ok: #3ccf7a;
+  --warn: #f0a04b;
+  --err: #ff5a6e;
+  --display: "Teko", "Arial Narrow", sans-serif;
+  --body: "Noto Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body {
-  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  background: var(--bg); color: var(--text); font-family: var(--body); font-size: 15px; line-height: 1.6;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 20px 48px;
 }
 .wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 28px; }
-h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: 0.01em; }
-h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 700; line-height: 1.05; }
-h2 { font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
-h3 { font-size: 15px; font-weight: 600; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; text-transform: uppercase; line-height: .98; letter-spacing: .3px; color: var(--ink); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(44px, 9vw, 72px); }
+h2 { font-size: 34px; display: flex; align-items: center; gap: 12px; }
+h3 { font-size: 22px; }
 p { margin: 0; }
 .muted { color: var(--muted); }
 .step-no {
-  font-family: var(--mono); font-size: 13px; font-weight: 700; width: 26px; height: 26px; border-radius: 6px;
-  display: inline-grid; place-items: center; background: var(--ink); color: var(--bg);
+  font-family: var(--display); font-size: 26px; font-weight: 700; line-height: 1; width: 34px; height: 34px; border-radius: 5px;
+  display: inline-grid; place-items: center; padding-top: 4px; background: var(--accent); color: var(--accent-ink);
 }
 header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
 header .lede { max-width: 60ch; color: var(--muted); margin-top: 6px; }
 .chip {
   display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;
-  padding: 5px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); white-space: nowrap;
+  padding: 5px 11px; border-radius: 5px; background: var(--surface); border: 1px solid var(--line); white-space: nowrap; color: var(--text);
 }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
 .chip[data-state="ready"] .dot { background: var(--ok); }
@@ -66,7 +59,7 @@ header .lede { max-width: 60ch; color: var(--muted); margin-top: 6px; }
 .chip[data-state="loading"] .dot { animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .25; } }
 
-section.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 18px; min-width: 0; }
+section.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 24px; display: grid; gap: 18px; min-width: 0; }
 @media (max-width: 480px) { section.panel { padding: 14px; } }
 .panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
 
@@ -81,14 +74,14 @@ section.panel { background: var(--surface); border: 1px solid var(--line); borde
 }
 .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 button, .btn {
-  font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 9px; padding: 10px 14px;
-  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px;
+  font: inherit; font-weight: 700; font-size: 14px; cursor: pointer; border-radius: 5px; padding: 10px 18px;
+  border: 2px solid var(--ghost); background: transparent; color: #ffffff; transition: .15s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px;
 }
-button:hover, .btn:hover { border-color: var(--muted); }
-button:focus-visible, .btn:focus-within, .sticker:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button:hover, .btn:hover { border-color: #ffffff; }
+button:focus-visible, .btn:focus-within, .sticker:focus-visible { outline: 3px solid #ffffff; outline-offset: 2px; }
 button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-button.primary:hover { filter: brightness(1.08); }
+button.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .btn input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .zoom { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
@@ -110,7 +103,7 @@ p.zoom { margin-top: 4px; display: block; }
 .ctl-check input { accent-color: var(--accent); width: 16px; height: 16px; }
 .zoom select { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 
-.instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.instr { background: var(--sunken); border-radius: 8px; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .instr-text { display: grid; gap: 8px; min-width: 0; }
 .turn-guide { width: 190px; height: 190px; perspective: 800px; }
 .tg-flip, .tg-view { width: 100%; height: 100%; display: grid; place-items: center; transform-style: preserve-3d; }
@@ -135,7 +128,7 @@ p.zoom { margin-top: 4px; display: block; }
 .calib .palette { margin-top: 10px; }
 .calib-msg:empty { display: none; }
 .instr .eyebrow { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
-.instr h3 { font-size: 20px; }
+.instr h3 { font-size: 32px; }
 .notice { font-size: 13px; color: var(--warn); }
 .faces { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .faces button { width: 100%; flex-direction: column; gap: 6px; padding: 10px 6px; min-height: 0; font-weight: 500; }
@@ -152,9 +145,13 @@ p.zoom { margin-top: 4px; display: block; }
 .review-hint { flex-basis: 100%; font-size: 13px; color: var(--muted); }
 .review-warn { flex-basis: 100%; font-size: 14px; color: var(--warn); font-weight: 500; }
 .status .note { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
-.linkish { background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-size: 13px; color: var(--accent); text-decoration: underline; cursor: pointer; font-weight: 500; }
+.linkish { background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-size: 13px; color: #ffffff; text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; cursor: pointer; font-weight: 600; }
 .linkish:hover { border: 0; }
 .tips { font-size: 13px; color: var(--muted); padding-left: 18px; margin: 0; display: grid; gap: 4px; }
+
+/* Quieter frames for small, repeated buttons */
+.faces button, .palette button, .moves button { border-width: 1px; border-color: var(--line); background: var(--sunken); color: var(--text); }
+.faces button:hover, .palette button:hover, .moves button:hover { border-color: var(--muted); }
 
 /* Net editor */
 .net-grid { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 24px; align-items: start; }
@@ -162,7 +159,7 @@ p.zoom { margin-top: 4px; display: block; }
 .net-scroll { overflow-x: auto; }
 .net { --s: clamp(17px, 5vw, 30px); display: grid; grid-template-columns: repeat(4, auto); gap: 6px; width: max-content; }
 .netface { display: grid; gap: 3px; justify-items: center; }
-.netface .cap { font-size: 12px; font-weight: 600; color: var(--muted); }
+.netface .cap { font-family: var(--display); font-size: 18px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
 .netface[data-f="F"] .cap { color: var(--accent); }
 .face { display: grid; grid-template-columns: repeat(3, var(--s)); gap: 3px; padding: 4px; background: var(--plastic); border-radius: 6px; }
 .netface[data-f="U"] { grid-column: 2; grid-row: 1; }
@@ -191,19 +188,24 @@ p.zoom { margin-top: 4px; display: block; }
 .stage { width: 100%; max-width: 340px; aspect-ratio: 1; display: grid; place-items: center; perspective: 900px; background: var(--sunken); border-radius: 12px; touch-action: none; cursor: grab; justify-self: center; }
 .cube3d { --c: 150px; width: var(--c); height: var(--c); position: relative; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.3,.7,.2,1); }
 .cube3d.dragging { transition: none; }
-.f3 { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 5px; background: var(--plastic); border-radius: 8px; backface-visibility: hidden; }
-.f3 i { border-radius: 4px; transition: background-color .25s; }
-.f3[data-f="F"] { transform: translateZ(calc(var(--c) / 2)); }
-.f3[data-f="B"] { transform: rotateY(180deg) translateZ(calc(var(--c) / 2)); }
-.f3[data-f="R"] { transform: rotateY(90deg) translateZ(calc(var(--c) / 2)); }
-.f3[data-f="L"] { transform: rotateY(-90deg) translateZ(calc(var(--c) / 2)); }
-.f3[data-f="U"] { transform: rotateX(90deg) translateZ(calc(var(--c) / 2)); }
-.f3[data-f="D"] { transform: rotateX(-90deg) translateZ(calc(var(--c) / 2)); }
-.f3 svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity .3s; }
-.f3.arrow svg { opacity: 1; }
-.f3.turn { box-shadow: 0 0 0 4px var(--accent); }
+.cubie, .layer { position: absolute; left: 0; top: 0; transform-style: preserve-3d; }
+.cubie { width: calc(var(--c) / 3); height: calc(var(--c) / 3); }
+.layer { width: var(--c); height: var(--c); }
+.cf { position: absolute; inset: 0; background: var(--plastic); border-radius: 3px; }
+.cf i { position: absolute; inset: 6%; border-radius: 14%; }
+.cf[data-f="F"] { transform: translateZ(calc(var(--c) / 6)); }
+.cf[data-f="B"] { transform: rotateY(180deg) translateZ(calc(var(--c) / 6)); }
+.cf[data-f="R"] { transform: rotateY(90deg) translateZ(calc(var(--c) / 6)); }
+.cf[data-f="L"] { transform: rotateY(-90deg) translateZ(calc(var(--c) / 6)); }
+.cf[data-f="U"] { transform: rotateX(90deg) translateZ(calc(var(--c) / 6)); }
+.cf[data-f="D"] { transform: rotateX(-90deg) translateZ(calc(var(--c) / 6)); }
+.ov { position: absolute; left: 0; top: 0; width: var(--c); height: var(--c); pointer-events: none; opacity: 0; transition: opacity .3s; }
+.ov.arrow { opacity: 1; }
+.ov[data-f="F"] { transform: translateZ(calc(var(--c) / 2 + 2px)); }
+.ov[data-f="B"] { transform: rotateY(180deg) translateZ(calc(var(--c) / 2 + 2px)); }
+.ov svg { width: 100%; height: 100%; }
 .move-card { display: grid; gap: 12px; }
-.move-big { font-family: var(--display); font-weight: 700; font-size: clamp(40px, 10vw, 64px); line-height: 1; }
+.move-big { font-family: var(--display); font-weight: 700; font-size: clamp(56px, 13vw, 92px); line-height: .9; text-transform: uppercase; color: var(--ink); }
 .notation { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .move-desc { font-size: 18px; font-weight: 500; max-width: 40ch; }
 .counter { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -215,7 +217,7 @@ p.zoom { margin-top: 4px; display: block; }
 .hold b { font-weight: 600; }
 .legend { font-size: 13px; color: var(--muted); }
 .legend code { font-family: var(--mono); color: var(--ink); }
-@media (prefers-reduced-motion: reduce) { .cube3d, .f3 i, .f3 svg { transition: none; } .chip .dot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .cube3d, .ov { transition: none; } .chip .dot { animation: none; } }
 </style>
 
 <div class="wrap">
@@ -1007,7 +1009,7 @@ p.zoom { margin-top: 4px; display: block; }
       vctx.fill("evenodd");
     } else {
       vctx.fillStyle = "#16181d"; vctx.fillRect(0, 0, S, S);
-      vctx.fillStyle = "#8a93a0"; vctx.font = `600 ${18 * u}px 'IBM Plex Sans', sans-serif`; vctx.textAlign = "center";
+      vctx.fillStyle = "#8a93a0"; vctx.font = `600 ${18 * u}px 'Noto Sans', sans-serif`; vctx.textAlign = "center";
       vctx.fillText("Kamera starten oder Foto aufnehmen", S / 2, S * 0.94);
       live = [];
     }
@@ -1025,7 +1027,7 @@ p.zoom { margin-top: 4px; display: block; }
     quad.forEach(([x, y]) => {
       vctx.beginPath(); vctx.arc(x, y, 11 * u, 0, Math.PI * 2);
       vctx.fillStyle = "rgba(255,255,255,0.95)"; vctx.fill();
-      vctx.lineWidth = 3 * u; vctx.strokeStyle = "#1d4ed8"; vctx.stroke();
+      vctx.lineWidth = 3 * u; vctx.strokeStyle = "#e81938"; vctx.stroke();
     });
     requestAnimationFrame(render);
   }
@@ -1315,19 +1317,41 @@ p.zoom { margin-top: 4px; display: block; }
   });
 
   // ---------- 3D cube ----------
+  // 26 small cubies, so a layer can be turned on screen. Stickers map to cubies by face, row and column.
   const cube3d = document.getElementById("cube3d"), stage = document.getElementById("stage");
   const VIEWS = { F: [-24, -38], R: [-24, -38], U: [-24, -38], L: [-24, 38], B: [-24, 142], D: [24, -38] };
-  let rot = VIEWS.F.slice(), faceEls = {};
-  function arrowSvg() {
-    return `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><marker id="ah-ID" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ffffff"/></marker></defs>
+  const STD_RIGHT = { U: "R", F: "R", R: "B", D: "R", B: "L", L: "F" };
+  let rot = VIEWS.F.slice();
+  const cubies = {}, stickerEls = [], overlays = {};
+  let turnAnim = null;
+  function arrowSvg(id) {
+    return `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><marker id="ah-${id}" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ffffff"/></marker></defs>
       <path class="arc" d="" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" style="filter:drop-shadow(0 0 3px rgba(0,0,0,.8))"/></svg>`;
   }
   function buildCube() {
-    FACES.forEach(f => {
-      const el = document.createElement("div"); el.className = "f3"; el.dataset.f = f;
-      for (let k = 0; k < 9; k++) el.appendChild(document.createElement("i"));
-      el.insertAdjacentHTML("beforeend", arrowSvg().replace(/ID/g, f));
-      cube3d.appendChild(el); faceEls[f] = el;
+    for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+      if (!x && !y && !z) continue;
+      const el = document.createElement("div"); el.className = "cubie";
+      el.style.transform = `translate3d(calc(var(--c) / 3 * ${x + 1}), calc(var(--c) / 3 * ${1 - y}), calc(var(--c) / 3 * ${z}))`;
+      el._pos = [x, y, z]; el._faces = {};
+      FACES.forEach(f => {
+        const n = NORMAL[f];
+        if (n.some((v, i) => v && v !== el._pos[i])) return;   // only faces on the outside of the cube
+        const cf = document.createElement("div"); cf.className = "cf"; cf.dataset.f = f;
+        const st = document.createElement("i"); cf.appendChild(st); el.appendChild(cf); el._faces[f] = st;
+      });
+      cube3d.appendChild(el); cubies[[x, y, z].join()] = el;
+    }
+    FACES.forEach((f, fi) => {
+      const n = NORMAL[f], t = NORMAL[STD_TOP[f]], r = NORMAL[STD_RIGHT[f]];
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+        const pos = [0, 1, 2].map(k => n[k] + r[k] * (j - 1) + t[k] * (1 - i));
+        stickerEls[fi * 9 + i * 3 + j] = cubies[pos.join()]._faces[f];
+      }
+    });
+    ["F", "B"].forEach(f => {
+      const ov = document.createElement("div"); ov.className = "ov"; ov.dataset.f = f;
+      ov.innerHTML = arrowSvg(f); cube3d.appendChild(ov); overlays[f] = ov;
     });
     applyRot();
   }
@@ -1340,37 +1364,61 @@ p.zoom { margin-top: 4px; display: block; }
     R: [80, 86, 80, 14],   // right column up
     L: [20, 14, 20, 86],   // left column down
   };
+  // World rotation about a face's outward axis; a clockwise turn seen from outside is -90 degrees.
+  function axisRot(f, quarter) {
+    const n = NORMAL[f], k = n.findIndex(v => v), a = -quarter * n[k] * Math.PI / 2;
+    const c = Math.round(Math.cos(a)), sn = Math.round(Math.sin(a));
+    if (k === 0) return [[1, 0, 0], [0, c, -sn], [0, sn, c]];
+    if (k === 1) return [[c, 0, sn], [0, 1, 0], [-sn, 0, c]];
+    return [[c, -sn, 0], [sn, c, 0], [0, 0, 1]];
+  }
+  function stopTurn() {
+    if (turnAnim) { turnAnim.cancel(); turnAnim = null; }
+    const layer = cube3d.querySelector(".layer");
+    if (layer) { [...layer.children].forEach(c => cube3d.insertBefore(c, layer)); layer.remove(); }
+  }
+  // Loops the move on screen: rest, turn the layer, rest at the result, start again.
+  function playTurn(mv) {
+    stopTurn();
+    if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const f = mv[0], mod = mv.slice(1), n = NORMAL[f], k = n.findIndex(v => v);
+    const layer = document.createElement("div"); layer.className = "layer";
+    Object.values(cubies).filter(c => c._pos[k] === n[k]).forEach(c => layer.appendChild(c));
+    cube3d.appendChild(layer);
+    const q = mod === "'" ? -1 : 1, frames = [{ transform: cssMatrix(ID), offset: 0 }, { transform: cssMatrix(ID), offset: 0.3 }];
+    if (mod === "2") frames.push({ transform: cssMatrix(axisRot(f, 1)), offset: 0.5 }, { transform: cssMatrix(axisRot(f, 2)), offset: 0.7 });
+    else frames.push({ transform: cssMatrix(axisRot(f, q)), offset: 0.7 });
+    frames.push({ transform: frames[frames.length - 1].transform, offset: 1 });
+    turnAnim = layer.animate(frames, { duration: mod === "2" ? 2800 : 2400, iterations: Infinity, easing: "ease-in-out" });
+  }
   function paintCube(fl, mv) {
-    FACES.forEach((f, fi) => {
-      const el = faceEls[f]; if (!el) return;
-      el.querySelectorAll("i").forEach((t, k) => { t.style.background = colorOf(fl[fi * 9 + k]).hex; });
-      el.classList.toggle("turn", !!mv && mv[0] === f);
-      el.classList.remove("arrow");
-    });
-    if (mv) {
-      const f = mv[0], mod = mv.slice(1);
-      if (FRONT_ARROW[f]) {
-        const el = faceEls.F, path = el.querySelector(".arc");
-        let [x1, y1, x2, y2] = FRONT_ARROW[f];
-        if (mod === "'") [x1, y1, x2, y2] = [x2, y2, x1, y1];
-        path.setAttribute("d", `M${x1},${y1} L${x2},${y2}`);
-        path.setAttribute("marker-end", "url(#ah-F)");
-        if (mod === "2") path.setAttribute("marker-start", "url(#ah-F)"); else path.removeAttribute("marker-start");
-        el.classList.add("arrow");
-        rot = VIEWS.F.slice(); applyRot();
-      } else {
-        // Front and back: round arrow on that face, clockwise as seen from outside it.
-        const el = faceEls[f], arc = el.querySelector(".arc");
-        const cw = mod !== "'", r = 30, a0 = -150, sweep = mod === "2" ? 300 : 240;
-        const p = deg => [50 + r * Math.cos(deg * Math.PI / 180), 50 + r * Math.sin(deg * Math.PI / 180)];
-        const s = cw ? p(a0) : p(a0 + sweep), e = cw ? p(a0 + sweep) : p(a0);
-        arc.setAttribute("d", `M${s[0].toFixed(1)},${s[1].toFixed(1)} A${r},${r} 0 1 ${cw ? 1 : 0} ${e[0].toFixed(1)},${e[1].toFixed(1)}`);
-        arc.setAttribute("marker-end", `url(#ah-${f})`);
-        if (mod === "2") arc.setAttribute("marker-start", `url(#ah-${f})`); else arc.removeAttribute("marker-start");
-        el.classList.add("arrow");
-        rot = VIEWS[f].slice(); applyRot();
-      }
+    stopTurn();
+    stickerEls.forEach((el, i) => { el.style.background = colorOf(fl[i]).hex; });
+    Object.values(overlays).forEach(o => o.classList.remove("arrow"));
+    if (!mv) return;
+    const f = mv[0], mod = mv.slice(1);
+    if (FRONT_ARROW[f]) {
+      const ov = overlays.F, path = ov.querySelector(".arc");
+      let [x1, y1, x2, y2] = FRONT_ARROW[f];
+      if (mod === "'") [x1, y1, x2, y2] = [x2, y2, x1, y1];
+      path.setAttribute("d", `M${x1},${y1} L${x2},${y2}`);
+      path.setAttribute("marker-end", "url(#ah-F)");
+      if (mod === "2") path.setAttribute("marker-start", "url(#ah-F)"); else path.removeAttribute("marker-start");
+      ov.classList.add("arrow");
+      rot = VIEWS.F.slice(); applyRot();
+    } else {
+      // Front and back: round arrow on that face, clockwise as seen from outside it.
+      const ov = overlays[f], arc = ov.querySelector(".arc");
+      const cw = mod !== "'", r = 30, a0 = -150, sweep = mod === "2" ? 300 : 240;
+      const p = deg => [50 + r * Math.cos(deg * Math.PI / 180), 50 + r * Math.sin(deg * Math.PI / 180)];
+      const s0 = cw ? p(a0) : p(a0 + sweep), e = cw ? p(a0 + sweep) : p(a0);
+      arc.setAttribute("d", `M${s0[0].toFixed(1)},${s0[1].toFixed(1)} A${r},${r} 0 1 ${cw ? 1 : 0} ${e[0].toFixed(1)},${e[1].toFixed(1)}`);
+      arc.setAttribute("marker-end", `url(#ah-${f})`);
+      if (mod === "2") arc.setAttribute("marker-start", `url(#ah-${f})`); else arc.removeAttribute("marker-start");
+      ov.classList.add("arrow");
+      rot = VIEWS[f].slice(); applyRot();
     }
+    playTurn(mv);
   }
   let rdrag = null;
   stage.addEventListener("pointerdown", e => { rdrag = { x: e.clientX, y: e.clientY }; stage.setPointerCapture(e.pointerId); cube3d.classList.add("dragging"); });
