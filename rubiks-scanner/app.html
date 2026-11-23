@@ -115,10 +115,10 @@ p.zoom { margin-top: 4px; }
 .faces .lbl { font-size: 13px; }
 .mini { display: grid; grid-template-columns: repeat(3, 12px); gap: 2px; padding: 3px; border-radius: 4px; background: var(--plastic); }
 .mini i { width: 12px; height: 12px; border-radius: 2px; background: #3a3f48; }
-.review { position: absolute; inset: 14%; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
-.review button { background: transparent; border: 0; border-radius: 0; padding: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.review { position: absolute; inset: 0; }
+.review button { position: absolute; transform: translate(-50%, -50%); background: transparent; border: 0; border-radius: 8px; padding: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
 .review button:hover { background: rgba(255,255,255,.08); border: 0; }
-.review .swatch { width: 44%; aspect-ratio: 1; border-radius: 8px; border: 3px solid #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,.55); }
+.review .swatch { width: 52%; aspect-ratio: 1; border-radius: 8px; border: 3px solid #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,.55); }
 .review .changed .swatch { border-style: dashed; }
 .review .nm { font: 600 12px var(--body); color: #ffffff; background: rgba(0,0,0,.7); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
 .review-hint { flex-basis: 100%; font-size: 13px; color: var(--muted); }
@@ -131,16 +131,18 @@ p.zoom { margin-top: 4px; }
 @media (max-width: 760px) { .net-grid { grid-template-columns: minmax(0, 1fr); } }
 .net-scroll { overflow-x: auto; }
 .net { --s: clamp(17px, 5vw, 30px); display: grid; grid-template-columns: repeat(4, auto); gap: 6px; width: max-content; }
+.netface { display: grid; gap: 3px; justify-items: center; }
+.netface .cap { font-size: 12px; font-weight: 600; color: var(--muted); }
+.netface[data-f="F"] .cap { color: var(--accent); }
 .face { display: grid; grid-template-columns: repeat(3, var(--s)); gap: 3px; padding: 4px; background: var(--plastic); border-radius: 6px; }
-.face[data-f="U"] { grid-column: 2; grid-row: 1; }
-.face[data-f="L"] { grid-column: 1; grid-row: 2; }
-.face[data-f="F"] { grid-column: 2; grid-row: 2; }
-.face[data-f="R"] { grid-column: 3; grid-row: 2; }
-.face[data-f="B"] { grid-column: 4; grid-row: 2; }
-.face[data-f="D"] { grid-column: 2; grid-row: 3; }
+.netface[data-f="U"] { grid-column: 2; grid-row: 1; }
+.netface[data-f="L"] { grid-column: 1; grid-row: 2; }
+.netface[data-f="F"] { grid-column: 2; grid-row: 2; }
+.netface[data-f="R"] { grid-column: 3; grid-row: 2; }
+.netface[data-f="B"] { grid-column: 4; grid-row: 2; }
+.netface[data-f="D"] { grid-column: 2; grid-row: 3; }
 .sticker { width: var(--s); height: var(--s); border-radius: 4px; border: 0; padding: 0; min-height: 0; cursor: pointer; }
 .sticker.center { position: relative; }
-.sticker.center::after { content: attr(data-l); position: absolute; inset: 0; display: grid; place-items: center; font: 700 11px var(--mono); color: rgba(0,0,0,.55); }
 .sticker.bad { outline: 3px solid var(--err); outline-offset: -3px; }
 .palette { display: flex; flex-wrap: wrap; gap: 8px; }
 .palette button { padding: 6px 10px 6px 6px; min-height: 0; font-weight: 500; font-size: 13px; }
@@ -171,11 +173,12 @@ p.zoom { margin-top: 4px; }
 .f3.turn svg { opacity: 1; }
 .f3.turn { box-shadow: 0 0 0 4px var(--accent); }
 .move-card { display: grid; gap: 12px; }
-.move-big { font-family: var(--mono); font-weight: 700; font-size: clamp(48px, 12vw, 76px); line-height: 1; }
+.move-big { font-family: var(--display); font-weight: 700; font-size: clamp(40px, 10vw, 64px); line-height: 1; }
+.notation { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .move-desc { font-size: 18px; font-weight: 500; max-width: 40ch; }
 .counter { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .moves { display: flex; flex-wrap: wrap; gap: 6px; }
-.moves button { font-family: var(--mono); font-size: 14px; min-height: 0; padding: 5px 9px; border-radius: 6px; font-weight: 700; }
+.moves button { font-family: var(--body); font-size: 13px; min-height: 0; padding: 5px 9px; border-radius: 6px; font-weight: 700; }
 .moves button.done { color: var(--muted); background: var(--sunken); }
 .moves button[aria-current="step"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .hold { font-size: 14px; background: var(--sunken); border-radius: 10px; padding: 12px 14px; }
@@ -229,6 +232,7 @@ p.zoom { margin-top: 4px; }
           <span id="zoomVal">1,0×</span>
         </div>
         <p class="zoom" id="zoomHint" hidden>Mausrad zoomt, Bild ziehen verschiebt den Ausschnitt.</p>
+        <p class="zoom" id="gridHint">Liegt die Würfelseite schräg im Bild, zieh die vier runden Griffe auf ihre Ecken. <button type="button" class="linkish" id="resetGrid">Raster zurücksetzen</button></p>
         <details class="camset" id="camSet" hidden>
           <summary>Kamera-Einstellungen</summary>
           <div class="camset-body" id="camSetBody"></div>
@@ -263,7 +267,7 @@ p.zoom { margin-top: 4px; }
     <div class="net-grid">
       <div class="net-scroll"><div class="net" id="net"></div></div>
       <div class="side">
-        <p class="muted">Vergleiche das Netz mit deinem Würfel. Ist ein Feld falsch, wähle unten die richtige Farbe und tippe das Feld an. Die Buchstaben markieren die Mittelfelder.</p>
+        <p class="muted">So sieht dein Würfel aufgeklappt aus: Vorne in der Mitte, daneben links, rechts und hinten, darüber oben und darunter unten. Ist ein Feld falsch, wähle unten die richtige Farbe und tippe das Feld an.</p>
         <div class="palette" id="palette" role="group" aria-label="Farbe zum Korrigieren"></div>
         <div class="status" id="status" aria-live="polite"></div>
         <div><button class="primary" id="solveBtn" type="button" disabled>Lösung berechnen</button></div>
@@ -285,13 +289,14 @@ p.zoom { margin-top: 4px; }
       <div class="move-card">
         <span class="counter" id="moveCounter">Noch keine Lösung</span>
         <div class="move-big" id="moveBig">–</div>
+        <span class="notation" id="moveNotation"></span>
         <p class="move-desc" id="moveDesc">Scanne deinen Würfel oder probiere es mit dem Beispielwürfel: Klicke auf „Lösung berechnen“.</p>
         <div class="controls">
           <button id="prev" type="button" disabled>Zurück</button>
           <button class="primary" id="next" type="button" disabled>Weiter</button>
         </div>
         <div class="moves" id="moves"></div>
-        <p class="legend">Schreibweise: <code>R</code> rechts, <code>L</code> links, <code>U</code> oben, <code>D</code> unten, <code>F</code> vorne, <code>B</code> hinten. Buchstabe allein heißt Vierteldrehung im Uhrzeigersinn, wenn du direkt auf diese Seite schaust. <code>'</code> heißt gegen den Uhrzeigersinn, <code>2</code> heißt halbe Drehung.</p>
+        <p class="legend">Du schaust immer auf die Vorderseite. Die Pfeile zeigen, wohin sich die Ebene dabei bewegt: <b>↑ ↓ ← →</b> nach oben, unten, links oder rechts, <b>↻</b> im Uhrzeigersinn, <b>↺</b> gegen den Uhrzeigersinn. <b>2×</b> heißt halbe Drehung.</p>
       </div>
     </div>
   </section>
@@ -308,6 +313,7 @@ p.zoom { margin-top: 4px; }
   // Facelet order follows Kociemba: U R F D L B, each face read row by row as seen from outside.
   const FACES = ["U", "R", "F", "D", "L", "B"];
   const SCAN_ORDER = ["F", "R", "B", "L", "U", "D"];
+  const SHORT_DE = { U: "Oben", R: "Rechts", F: "Vorne", D: "Unten", L: "Links", B: "Hinten" };
   const FACE_DE = { U: "Oberseite", R: "Rechte Seite", F: "Vorderseite", D: "Unterseite", L: "Linke Seite", B: "Rückseite" };
   const CANON = [
     { name: "Weiß", hex: "#f2f3f5" },
@@ -326,14 +332,19 @@ p.zoom { margin-top: 4px; }
   const EF = [[5,10],[7,19],[3,37],[1,46],[32,16],[28,25],[30,43],[34,52],[23,12],[21,41],[50,39],[48,14]];
   const EC = [[0,1],[0,2],[0,4],[0,5],[3,1],[3,2],[3,4],[3,5],[2,1],[2,4],[5,4],[5,1]];
 
-  const INSTR = {
-    F: "Wähle eine Seite als Vorderseite und halte sie gerade in die Kamera. Merke dir, welche Seite dabei oben ist. So hältst du den Würfel später auch beim Lösen.",
-    R: "Drehe den ganzen Würfel eine Vierteldrehung nach links, sodass die rechte Seite zur Kamera zeigt. Oben bleibt oben.",
-    B: "Noch eine Vierteldrehung nach links. Jetzt zeigt die Rückseite zur Kamera. Oben bleibt oben.",
-    L: "Noch eine Vierteldrehung nach links. Jetzt zeigt die linke Seite zur Kamera. Oben bleibt oben.",
-    U: "Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Oberseite zur Kamera zeigt. Die Vorderseite liegt jetzt unten im Bild.",
-    D: "Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Unterseite zur Kamera zeigt. Die Vorderseite liegt jetzt oben im Bild.",
-  };
+  // Directions refer to the preview. In a mirrored preview the cube's right side shows on the left.
+  function instrFor(f) {
+    const side = (video && mirror) ? "links" : "rechts";
+    const note = (video && mirror) ? " Das Bild ist gespiegelt, deshalb links." : "";
+    return {
+      F: "Richte eine Seite gerade zur Kamera. Das ist ab jetzt die Vorderseite. Die Seite, die im Bild oben liegt, ist die Oberseite. So liegt der Würfel später auch beim Lösen.",
+      R: `Drehe den Würfel, bis die Seite, die im Bild ${side} lag, zur Kamera zeigt. Die Oberseite bleibt dabei im Bild oben.${note}`,
+      B: "Weiter in dieselbe Richtung drehen, bis die Rückseite zur Kamera zeigt. Die Oberseite bleibt im Bild oben.",
+      L: "Noch einmal in dieselbe Richtung drehen. Jetzt zeigt die vierte Seite zur Kamera. Die Oberseite bleibt im Bild oben.",
+      U: "Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Oberseite zur Kamera zeigt. Die Vorderseite liegt danach im Bild unten.",
+      D: "Zurück zur Vorderseite. Kippe den Würfel so, dass die Unterseite zur Kamera zeigt. Die Vorderseite liegt danach im Bild oben.",
+    }[f];
+  }
 
   let facelets = solvedFacelets();   // 54 colour labels (index into CANON), confirmed by the viewer
   let source = "example";            // "example" | "scan"
@@ -533,9 +544,29 @@ p.zoom { margin-top: 4px; }
     mirrorBtn.textContent = `Spiegeln: ${mirror ? "an" : "aus"}`;
   }
   rotBtn.addEventListener("click", () => { rotation = (rotation + 90) % 360; saveOrient(); updateOrientUI(); });
-  mirrorBtn.addEventListener("click", () => { mirror = !mirror; mirrorPref = mirror; saveOrient(); updateOrientUI(); updateBadge(); });
+  mirrorBtn.addEventListener("click", () => { mirror = !mirror; mirrorPref = mirror; saveOrient(); updateOrientUI(); updateBadge(); renderScanUI(); });
   const camRow = document.getElementById("camRow"), camSelect = document.getElementById("camSelect");
-  const GRID_MARGIN = 0.14;
+  // The scan grid is a quadrilateral with draggable corners (in crop coordinates 0..1, before mirroring),
+  // so a face seen at an angle is still split into its nine stickers.
+  const GRID_KEY = "wuerfel-scanner-raster";
+  const DEF_CORNERS = [[0.14, 0.14], [0.86, 0.14], [0.86, 0.86], [0.14, 0.86]];
+  let corners = DEF_CORNERS.map(p => p.slice());
+  try {
+    const g = JSON.parse(localStorage.getItem(GRID_KEY));
+    if (Array.isArray(g) && g.length === 4 && g.every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite))) corners = g;
+  } catch (e) {}
+  function saveGrid() { try { localStorage.setItem(GRID_KEY, JSON.stringify(corners)); } catch (e) {} }
+  // Projective map from the unit square to the quad (Heckbert): (0,0) TL, (1,0) TR, (1,1) BR, (0,1) BL.
+  function quadMap(p) {
+    const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = p;
+    const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3, dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+    let g = 0, h = 0;
+    const den = dx1 * dy2 - dx2 * dy1;
+    if ((dx3 || dy3) && Math.abs(den) > 1e-9) { g = (dx3 * dy2 - dx2 * dy3) / den; h = (dx1 * dy3 - dx3 * dy1) / den; }
+    const a = x1 - x0 + g * x1, b = x3 - x0 + h * x3, d = y1 - y0 + g * y1, e = y3 - y0 + h * y3;
+    return (u, v) => { const w = g * u + h * v + 1; return [(a * u + b * v + x0) / w, (d * u + e * v + y0) / w]; };
+  }
+  document.getElementById("resetGrid").addEventListener("click", () => { corners = DEF_CORNERS.map(p => p.slice()); saveGrid(); });
 
   async function startCamera(deviceId) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return camFail();
@@ -555,7 +586,7 @@ p.zoom { margin-top: 4px; }
       photo = null; camNotice.hidden = true;
       crop = loadCamCrop(); setZoom(crop.zoom); showZoom(true);
       updateBadge();
-      orientRow.hidden = false; updateOrientUI();
+      orientRow.hidden = false; updateOrientUI(); renderScanUI();
       buildCamSettings(track);
       captureBtn.disabled = false;
       document.getElementById("startCam").textContent = "Kamera stoppen";
@@ -676,8 +707,22 @@ p.zoom { margin-top: 4px; }
 
   // Drag to pan the photo.
   let drag = null;
-  view.addEventListener("pointerdown", e => { if (!photo && !video) return; drag = { x: e.clientX, y: e.clientY }; view.setPointerCapture(e.pointerId); });
+  function viewPoint(e) { const r = view.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; }
+  view.addEventListener("pointerdown", e => {
+    const [px, py] = viewPoint(e), flip = !!(video && mirror);
+    let best = -1, bd = 0.065;
+    corners.forEach(([x, y], k) => { const d = Math.hypot((flip ? 1 - x : x) - px, y - py); if (d < bd) { bd = d; best = k; } });
+    if (best >= 0) drag = { corner: best };
+    else if (photo || video) drag = { x: e.clientX, y: e.clientY };
+    else return;
+    view.setPointerCapture(e.pointerId);
+  });
   view.addEventListener("pointermove", e => {
+    if (drag && drag.corner != null) {
+      const [px, py] = viewPoint(e), cx = Math.max(0.01, Math.min(0.99, px)), cy = Math.max(0.01, Math.min(0.99, py));
+      corners[drag.corner] = [(video && mirror) ? 1 - cx : cx, cy];
+      return;
+    }
     const size = sourceSize();
     if (!drag || !size) return;
     const s = Math.min(size[0], size[1]) / crop.zoom;
@@ -689,7 +734,7 @@ p.zoom { margin-top: 4px; }
     crop.ox -= dx * c + dy * sn; crop.oy -= -dx * sn + dy * c;
     drag = { x: e.clientX, y: e.clientY };
   });
-  view.addEventListener("pointerup", () => { drag = null; saveCamCrop(); });
+  view.addEventListener("pointerup", () => { if (drag && drag.corner != null) saveGrid(); else saveCamCrop(); drag = null; });
   view.addEventListener("pointercancel", () => { drag = null; });
 
   function currentSource() {
@@ -716,45 +761,59 @@ p.zoom { margin-top: 4px; }
     return true;
   }
   function drawSource() { return drawCrop(wctx, work.width, false); }
+  // Reads the middle of each sticker through the quad. The brightest quarter of the pixels (glare on
+  // worn or glossy stickers) and the darkest tenth (edges, dirt) are dropped before taking the median.
   function sampleWork() {
-    const S = work.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3, box = Math.round(cell * 0.4);
+    const S = work.width, d = wctx.getImageData(0, 0, S, S).data, H = quadMap(corners), N = 8;
+    const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
     const rgb = [];
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
-      const x = Math.round(m + c * cell + (cell - box) / 2), y = Math.round(m + r * cell + (cell - box) / 2);
-      const d = wctx.getImageData(x, y, box, box).data;
-      const R = [], G = [], B = [];
-      for (let i = 0; i < d.length; i += 4) { R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]); }
-      const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
-      rgb.push([med(R), med(G), med(B)]);
+      const px = [];
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+        const [x, y] = H((c + 0.28 + 0.44 * i / (N - 1)) / 3, (r + 0.28 + 0.44 * j / (N - 1)) / 3);
+        const X = Math.max(0, Math.min(S - 1, Math.round(x * S))), Y = Math.max(0, Math.min(S - 1, Math.round(y * S))), o = (Y * S + X) * 4;
+        px.push([d[o], d[o + 1], d[o + 2]]);
+      }
+      px.sort((a, b) => (a[0] * 2 + a[1] * 3 + a[2]) - (b[0] * 2 + b[1] * 3 + b[2]));
+      const keep = px.slice(Math.floor(px.length * 0.1), Math.ceil(px.length * 0.75));
+      rgb.push([0, 1, 2].map(ch => med(keep.map(p => p[ch]))));
     }
     return { rgb, lab: rgb.map(rgb2lab) };
   }
   function render() {
     if (review) { requestAnimationFrame(render); return; }
-    const S = view.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3, u = S / 480;
+    const S = view.width, u = S / 480, flipD = !!(video && mirror), H = quadMap(corners);
+    const toD = ([x, y]) => [(flipD ? 1 - x : x) * S, y * S];
+    const quad = corners.map(toD);
     const cs = currentSource();
     if (cs) {
       vctx.imageSmoothingQuality = "high";
       drawCrop(vctx, S, !!(video && mirror));
       if (frame++ % 6 === 0) { drawSource(); live = sampleWork().rgb; }
       vctx.fillStyle = "rgba(0,0,0,0.35)";
-      vctx.fillRect(0, 0, S, m); vctx.fillRect(0, S - m, S, m); vctx.fillRect(0, m, m, S - 2 * m); vctx.fillRect(S - m, m, m, S - 2 * m);
+      vctx.beginPath(); vctx.rect(0, 0, S, S); vctx.moveTo(...quad[0]); quad.slice(1).forEach(p => vctx.lineTo(...p)); vctx.closePath();
+      vctx.fill("evenodd");
     } else {
       vctx.fillStyle = "#16181d"; vctx.fillRect(0, 0, S, S);
       vctx.fillStyle = "#8a93a0"; vctx.font = `600 ${18 * u}px 'IBM Plex Sans', sans-serif`; vctx.textAlign = "center";
-      vctx.fillText("Kamera starten oder Foto aufnehmen", S / 2, S - m / 2 + 6 * u);
+      vctx.fillText("Kamera starten oder Foto aufnehmen", S / 2, S * 0.94);
       live = [];
     }
     vctx.strokeStyle = "rgba(255,255,255,0.9)"; vctx.lineWidth = 3 * u;
     for (let i = 0; i <= 3; i++) {
-      vctx.beginPath(); vctx.moveTo(m + i * cell, m); vctx.lineTo(m + i * cell, S - m); vctx.stroke();
-      vctx.beginPath(); vctx.moveTo(m, m + i * cell); vctx.lineTo(S - m, m + i * cell); vctx.stroke();
+      const a = toD(H(i / 3, 0)), b = toD(H(i / 3, 1)), c = toD(H(0, i / 3)), d = toD(H(1, i / 3));
+      vctx.beginPath(); vctx.moveTo(...a); vctx.lineTo(...b); vctx.stroke();
+      vctx.beginPath(); vctx.moveTo(...c); vctx.lineTo(...d); vctx.stroke();
     }
     if (live.length) live.forEach((c, i) => {
-      const col = (video && mirror) ? 2 - (i % 3) : i % 3;
-      const x = m + col * cell + cell - 26 * u, y = m + Math.floor(i / 3) * cell + 8 * u, q = 18 * u;
-      vctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; vctx.fillRect(x, y, q, q);
-      vctx.strokeStyle = "#fff"; vctx.lineWidth = 2 * u; vctx.strokeRect(x, y, q, q);
+      const [x, y] = toD(H((i % 3 + 0.5) / 3, (Math.floor(i / 3) + 0.5) / 3)), q = 16 * u;
+      vctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; vctx.fillRect(x - q / 2, y - q / 2, q, q);
+      vctx.strokeStyle = "#fff"; vctx.lineWidth = 2 * u; vctx.strokeRect(x - q / 2, y - q / 2, q, q);
+    });
+    quad.forEach(([x, y]) => {
+      vctx.beginPath(); vctx.arc(x, y, 11 * u, 0, Math.PI * 2);
+      vctx.fillStyle = "rgba(255,255,255,0.95)"; vctx.fill();
+      vctx.lineWidth = 3 * u; vctx.strokeStyle = "#1d4ed8"; vctx.stroke();
     });
     requestAnimationFrame(render);
   }
@@ -773,9 +832,15 @@ p.zoom { margin-top: 4px; }
   function renderReview() {
     reviewEl.innerHTML = ""; reviewEl.hidden = !review;
     if (!review) return;
-    for (let r = 0; r < 3; r++) for (let dc = 0; dc < 3; dc++) {
-      const k = r * 3 + (review.flip ? 2 - dc : dc), c = review.labels[k];
+    const H = quadMap(corners), toD = ([x, y]) => [review.flip ? 1 - x : x, y];
+    for (let k = 0; k < 9; k++) {
+      const r = Math.floor(k / 3), cc = k % 3, c = review.labels[k];
       const b = document.createElement("button"); b.type = "button";
+      const [cx, cy] = toD(H((cc + 0.5) / 3, (r + 0.5) / 3));
+      const w = Math.hypot(...[0, 1].map(j => H((cc + 1) / 3, (r + 0.5) / 3)[j] - H(cc / 3, (r + 0.5) / 3)[j]));
+      const h = Math.hypot(...[0, 1].map(j => H((cc + 0.5) / 3, (r + 1) / 3)[j] - H((cc + 0.5) / 3, r / 3)[j]));
+      const size = Math.min(w, h) * 96;
+      Object.assign(b.style, { left: cx * 100 + "%", top: cy * 100 + "%", width: size + "%", height: size + "%" });
       if (c !== review.ranks[k][0]) b.className = "changed";
       const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = CANON[c].hex;
       const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = CANON[c].name;
@@ -832,7 +897,7 @@ p.zoom { margin-top: 4px; }
     const idx = SCAN_ORDER.indexOf(currentFace);
     document.getElementById("instrEyebrow").textContent = `Seite ${idx + 1} von 6`;
     document.getElementById("instrTitle").textContent = FACE_DE[currentFace];
-    document.getElementById("instrText").textContent = INSTR[currentFace];
+    document.getElementById("instrText").textContent = instrFor(currentFace);
     const list = document.getElementById("faceList"); list.innerHTML = "";
     SCAN_ORDER.forEach((f, i) => {
       const li = document.createElement("li"), b = document.createElement("button");
@@ -864,17 +929,18 @@ p.zoom { margin-top: 4px; }
     lastCheck = validate(facelets);
     netEl.innerHTML = "";
     FACES.forEach((f, fi) => {
-      const face = document.createElement("div"); face.className = "face"; face.dataset.f = f;
+      const wrap = document.createElement("div"); wrap.className = "netface"; wrap.dataset.f = f;
+      const cap = document.createElement("span"); cap.className = "cap"; cap.textContent = SHORT_DE[f];
+      const face = document.createElement("div"); face.className = "face";
       for (let k = 0; k < 9; k++) {
         const i = fi * 9 + k, b = document.createElement("button");
         b.type = "button"; b.className = "sticker" + (k === 4 ? " center" : "") + (lastCheck.bad.has(i) ? " bad" : "");
         b.style.background = colorOf(facelets[i]).hex;
         b.setAttribute("aria-label", `${FACE_DE[f]}, Feld ${k + 1}: ${colorOf(facelets[i]).name}`);
-        if (k === 4) b.dataset.l = f;
         b.addEventListener("click", () => { facelets[i] = paint; clearSolution(); renderNet(); });
         face.appendChild(b);
       }
-      netEl.appendChild(face);
+      wrap.append(cap, face); netEl.appendChild(wrap);
     });
     document.getElementById("sourceTag").textContent = source === "example" ? "Beispielwürfel" : "Dein Scan";
     statusEl.innerHTML = "";
@@ -931,6 +997,12 @@ p.zoom { margin-top: 4px; }
     B: ["von vorne gesehen gegen den Uhrzeigersinn", "von vorne gesehen im Uhrzeigersinn"],
   };
   const LAYER = { U: "Obere Ebene", D: "Untere Ebene", R: "Rechte Seite", L: "Linke Seite", F: "Vorderseite", B: "Rückseite" };
+  // Short German label per move, seen from the front: arrows show where the turning layer moves.
+  const SHORT_MOVE = {
+    R: ["Rechts ↑", "Rechts ↓"], L: ["Links ↓", "Links ↑"], U: ["Oben ←", "Oben →"], D: ["Unten →", "Unten ←"],
+    F: ["Vorne ↻", "Vorne ↺"], B: ["Hinten ↺", "Hinten ↻"],
+  };
+  function shortMove(mv) { const f = mv[0], mod = mv.slice(1); return mod === "2" ? `${SHORT_DE[f]} 2×` : SHORT_MOVE[f][mod === "'" ? 1 : 0]; }
   function describe(mv) {
     const f = mv[0], mod = mv.slice(1);
     if (mod === "2") return `${LAYER[f]} eine halbe Drehung (180°) drehen. Die Richtung ist egal.`;
@@ -943,7 +1015,7 @@ p.zoom { margin-top: 4px; }
     const prev = document.getElementById("prev"), next = document.getElementById("next");
     list.innerHTML = "";
     if (!solution) {
-      big.textContent = "–"; counter.textContent = "Noch keine Lösung";
+      big.textContent = "–"; counter.textContent = "Noch keine Lösung"; document.getElementById("moveNotation").textContent = "";
       desc.textContent = "Scanne deinen Würfel oder probiere es mit dem Beispielwürfel: Klicke auf „Lösung berechnen“.";
       document.getElementById("solveCount").textContent = "";
       prev.disabled = next.disabled = true; paintCube(facelets, null); return;
@@ -951,19 +1023,20 @@ p.zoom { margin-top: 4px; }
     const n = solution.moves.length;
     document.getElementById("solveCount").textContent = `${n} Züge`;
     solution.moves.forEach((mv, i) => {
-      const b = document.createElement("button"); b.type = "button"; b.textContent = mv;
+      const b = document.createElement("button"); b.type = "button"; b.textContent = shortMove(mv); b.dataset.mv = mv;
       if (i < step) b.className = "done";
       if (i === step) b.setAttribute("aria-current", "step");
       b.addEventListener("click", () => { step = i; renderSolution(); });
       list.appendChild(b);
     });
     if (step >= n) {
-      big.textContent = "✓"; counter.textContent = n ? `Alle ${n} Züge erledigt` : "";
+      big.textContent = "✓"; counter.textContent = n ? `Alle ${n} Züge erledigt` : ""; document.getElementById("moveNotation").textContent = "";
       desc.textContent = n ? "Fertig. Dein Würfel ist gelöst." : "Dieser Würfel ist bereits gelöst.";
       paintCube(solution.states[n], null);
     } else {
       const mv = solution.moves[step];
-      big.textContent = mv; counter.textContent = `Zug ${step + 1} von ${n}`;
+      big.textContent = shortMove(mv); counter.textContent = `Zug ${step + 1} von ${n}`;
+      document.getElementById("moveNotation").textContent = `Fachschreibweise: ${mv}`;
       desc.textContent = describe(mv);
       paintCube(solution.states[step], mv);
     }
