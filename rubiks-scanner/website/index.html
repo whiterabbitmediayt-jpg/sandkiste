@@ -1,0 +1,1384 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Würfel-Scanner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="fonts/fonts.css">
+<style>
+/* Layout: a workbench — camera on the left, checklist on the right, then net editor and solution player stacked below. */
+:root {
+  --bg: #eceef2;
+  --surface: #ffffff;
+  --sunken: #e2e5eb;
+  --ink: #14171c;
+  --muted: #59626e;
+  --line: #d3d8e0;
+  --accent: #1d4ed8;
+  --accent-ink: #ffffff;
+  --plastic: #111317;
+  --ok: #17803f;
+  --warn: #a3520a;
+  --err: #c0262d;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --surface: #171a20; --sunken: #0b0d10; --ink: #e8ebf0; --muted: #98a1ae;
+    --line: #2a2f38; --accent: #7aa0ff; --accent-ink: #0b0f1a; --plastic: #050608;
+    --ok: #4cc47a; --warn: #f0a04b; --err: #ff6b6f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #171a20; --sunken: #0b0d10; --ink: #e8ebf0; --muted: #98a1ae;
+  --line: #2a2f38; --accent: #7aa0ff; --accent-ink: #0b0f1a; --plastic: #050608;
+  --ok: #4cc47a; --warn: #f0a04b; --err: #ff6b6f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 28px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: 0.01em; }
+h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 700; line-height: 1.05; }
+h2 { font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+h3 { font-size: 15px; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.step-no {
+  font-family: var(--mono); font-size: 13px; font-weight: 700; width: 26px; height: 26px; border-radius: 6px;
+  display: inline-grid; place-items: center; background: var(--ink); color: var(--bg);
+}
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+header .lede { max-width: 60ch; color: var(--muted); margin-top: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;
+  padding: 5px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); white-space: nowrap;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.chip[data-state="ready"] .dot { background: var(--ok); }
+.chip[data-state="error"] .dot { background: var(--err); }
+.chip[data-state="loading"] .dot { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+
+section.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 18px; min-width: 0; }
+@media (max-width: 480px) { section.panel { padding: 14px; } }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+
+/* Scanner */
+.scan-grid { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .scan-grid { grid-template-columns: minmax(0, 1fr); } }
+.viewer { position: relative; width: 100%; max-width: 440px; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--plastic); touch-action: none; }
+.viewer canvas { width: 100%; height: 100%; display: block; }
+.viewer .badge {
+  position: absolute; left: 10px; top: 10px; font-family: var(--mono); font-size: 12px; font-weight: 700;
+  background: rgba(0,0,0,.6); color: #fff; padding: 4px 8px; border-radius: 6px;
+}
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+button, .btn {
+  font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 9px; padding: 10px 14px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px;
+}
+button:hover, .btn:hover { border-color: var(--muted); }
+button:focus-visible, .btn:focus-within, .sticker:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.primary:hover { filter: brightness(1.08); }
+button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+.btn input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.zoom { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.zoom input { flex: 1; accent-color: var(--accent); }
+#zoomVal { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+p.zoom { margin-top: 4px; display: block; }
+#orientRow { flex-wrap: wrap; }
+#orientRow button { white-space: nowrap; }
+.zoom button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+#mirrorBtn[aria-pressed="true"], #mirrorVBtn[aria-pressed="true"] { border-color: var(--accent); }
+.imgfix { margin-top: 12px; display: grid; gap: 8px; }
+.camset { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.camset summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.camset-body { display: grid; gap: 10px; padding-top: 12px; }
+.ctl { display: grid; grid-template-columns: minmax(0, 9em) minmax(0, 1fr) 4.5em; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.ctl input { width: 100%; accent-color: var(--accent); }
+.ctl output { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+.ctl-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ctl-check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.zoom select { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+
+.instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.instr-text { display: grid; gap: 8px; min-width: 0; }
+.turn-guide { width: 190px; height: 190px; perspective: 800px; }
+.tg-flip, .tg-view { width: 100%; height: 100%; display: grid; place-items: center; transform-style: preserve-3d; }
+.tg-view { transform: rotateX(-20deg) rotateY(-28deg); }
+.tg-cube { --c: 92px; width: var(--c); height: var(--c); position: relative; transform-style: preserve-3d; }
+.tg-f { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 4px; background: var(--plastic); border-radius: 7px; backface-visibility: hidden; }
+.tg-f i { border-radius: 3px; background: #6b717c; }
+@media (max-width: 520px) { .turn-guide { width: 140px; height: 140px; } .tg-cube { --c: 68px; } }
+@media (max-width: 400px) { .instr { grid-template-columns: minmax(0, 1fr); } .turn-guide { justify-self: center; } }
+.tg-f.target { box-shadow: 0 0 0 3px var(--accent); }
+.tg-f.target.unknown i { background: #e7ebf3; }
+.tg-f[data-f="F"] { transform: translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="B"] { transform: rotateY(180deg) translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="R"] { transform: rotateY(90deg) translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="L"] { transform: rotateY(-90deg) translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="U"] { transform: rotateX(90deg) translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="D"] { transform: rotateX(-90deg) translateZ(calc(var(--c) / 2)); }
+.calib { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 10px; }
+.calib summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.calib[open] { gap: 10px; }
+.calib p { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.calib .palette { margin-top: 10px; }
+.calib-msg:empty { display: none; }
+.instr .eyebrow { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.instr h3 { font-size: 20px; }
+.notice { font-size: 13px; color: var(--warn); }
+.faces { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.faces button { width: 100%; flex-direction: column; gap: 6px; padding: 10px 6px; min-height: 0; font-weight: 500; }
+.faces button[aria-current="step"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.faces .lbl { font-size: 13px; }
+.mini { display: grid; grid-template-columns: repeat(3, 12px); gap: 2px; padding: 3px; border-radius: 4px; background: var(--plastic); }
+.mini i { width: 12px; height: 12px; border-radius: 2px; background: #3a3f48; }
+.review { position: absolute; inset: 0; }
+.review button { position: absolute; transform: translate(-50%, -50%); background: transparent; border: 0; border-radius: 8px; padding: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.review button:hover { background: rgba(255,255,255,.08); border: 0; }
+.review .swatch { width: 52%; aspect-ratio: 1; border-radius: 8px; border: 3px solid #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,.55); }
+.review .changed .swatch { border-style: dashed; }
+.review .nm { font: 600 12px var(--body); color: #ffffff; background: rgba(0,0,0,.7); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.review-hint { flex-basis: 100%; font-size: 13px; color: var(--muted); }
+.review-warn { flex-basis: 100%; font-size: 14px; color: var(--warn); font-weight: 500; }
+.status .note { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+.linkish { background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-size: 13px; color: var(--accent); text-decoration: underline; cursor: pointer; font-weight: 500; }
+.linkish:hover { border: 0; }
+.tips { font-size: 13px; color: var(--muted); padding-left: 18px; margin: 0; display: grid; gap: 4px; }
+
+/* Net editor */
+.net-grid { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .net-grid { grid-template-columns: minmax(0, 1fr); } }
+.net-scroll { overflow-x: auto; }
+.net { --s: clamp(17px, 5vw, 30px); display: grid; grid-template-columns: repeat(4, auto); gap: 6px; width: max-content; }
+.netface { display: grid; gap: 3px; justify-items: center; }
+.netface .cap { font-size: 12px; font-weight: 600; color: var(--muted); }
+.netface[data-f="F"] .cap { color: var(--accent); }
+.face { display: grid; grid-template-columns: repeat(3, var(--s)); gap: 3px; padding: 4px; background: var(--plastic); border-radius: 6px; }
+.netface[data-f="U"] { grid-column: 2; grid-row: 1; }
+.netface[data-f="L"] { grid-column: 1; grid-row: 2; }
+.netface[data-f="F"] { grid-column: 2; grid-row: 2; }
+.netface[data-f="R"] { grid-column: 3; grid-row: 2; }
+.netface[data-f="B"] { grid-column: 4; grid-row: 2; }
+.netface[data-f="D"] { grid-column: 2; grid-row: 3; }
+.sticker { width: var(--s); height: var(--s); border-radius: 4px; border: 0; padding: 0; min-height: 0; cursor: pointer; }
+.sticker.center { position: relative; }
+.sticker.bad { outline: 3px solid var(--err); outline-offset: -3px; }
+.palette { display: flex; flex-wrap: wrap; gap: 8px; }
+.palette button { padding: 6px 10px 6px 6px; min-height: 0; font-weight: 500; font-size: 13px; }
+.palette .sw { width: 22px; height: 22px; border-radius: 5px; border: 2px solid var(--plastic); }
+.palette button[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.side { display: grid; gap: 14px; min-width: 0; }
+.status { border-radius: 10px; padding: 12px 14px; font-size: 14px; background: var(--sunken); border-left: 4px solid var(--muted); }
+.status[data-kind="ok"] { border-left-color: var(--ok); }
+.status[data-kind="err"] { border-left-color: var(--err); }
+.status ul { margin: 6px 0 0; padding-left: 18px; }
+.tag { font-family: var(--mono); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 7px; border-radius: 5px; background: var(--sunken); color: var(--muted); }
+
+/* Solution player */
+.solve-grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 24px; align-items: center; }
+@media (max-width: 760px) { .solve-grid { grid-template-columns: minmax(0, 1fr); } }
+.stage { width: 100%; max-width: 340px; aspect-ratio: 1; display: grid; place-items: center; perspective: 900px; background: var(--sunken); border-radius: 12px; touch-action: none; cursor: grab; justify-self: center; }
+.cube3d { --c: 150px; width: var(--c); height: var(--c); position: relative; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.3,.7,.2,1); }
+.cube3d.dragging { transition: none; }
+.f3 { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 5px; background: var(--plastic); border-radius: 8px; backface-visibility: hidden; }
+.f3 i { border-radius: 4px; transition: background-color .25s; }
+.f3[data-f="F"] { transform: translateZ(calc(var(--c) / 2)); }
+.f3[data-f="B"] { transform: rotateY(180deg) translateZ(calc(var(--c) / 2)); }
+.f3[data-f="R"] { transform: rotateY(90deg) translateZ(calc(var(--c) / 2)); }
+.f3[data-f="L"] { transform: rotateY(-90deg) translateZ(calc(var(--c) / 2)); }
+.f3[data-f="U"] { transform: rotateX(90deg) translateZ(calc(var(--c) / 2)); }
+.f3[data-f="D"] { transform: rotateX(-90deg) translateZ(calc(var(--c) / 2)); }
+.f3 svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity .3s; }
+.f3.turn svg { opacity: 1; }
+.f3.turn { box-shadow: 0 0 0 4px var(--accent); }
+.move-card { display: grid; gap: 12px; }
+.move-big { font-family: var(--display); font-weight: 700; font-size: clamp(40px, 10vw, 64px); line-height: 1; }
+.notation { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.move-desc { font-size: 18px; font-weight: 500; max-width: 40ch; }
+.counter { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.moves { display: flex; flex-wrap: wrap; gap: 6px; }
+.moves button { font-family: var(--body); font-size: 13px; min-height: 0; padding: 5px 9px; border-radius: 6px; font-weight: 700; }
+.moves button.done { color: var(--muted); background: var(--sunken); }
+.moves button[aria-current="step"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.hold { font-size: 14px; background: var(--sunken); border-radius: 10px; padding: 12px 14px; }
+.hold b { font-weight: 600; }
+.legend { font-size: 13px; color: var(--muted); }
+.legend code { font-family: var(--mono); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .cube3d, .f3 i, .f3 svg { transition: none; } .chip .dot { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Würfel-Scanner</h1>
+      <p class="lede">Scanne die sechs Seiten deines Zauberwürfels mit der Kamera. Die App erkennt die Farben, prüft den Würfel und zeigt dir die Lösung Zug für Zug, meist in unter 22 Zügen. Das Kamerabild wird nur in deinem Browser ausgewertet und nirgendwohin übertragen.</p>
+    </div>
+    <span class="chip" id="solverChip" data-state="loading"><span class="dot"></span><span id="solverText">Löser wird vorbereitet …</span></span>
+  </header>
+
+  <!-- 1 Scan -->
+  <section class="panel" aria-labelledby="h-scan">
+    <div class="panel-head">
+      <h2 id="h-scan"><span class="step-no">1</span>Seiten scannen</h2>
+      <button id="resetScan" type="button">Scan neu beginnen</button>
+    </div>
+    <div class="scan-grid">
+      <div>
+        <div class="viewer" id="viewer">
+          <canvas id="view" width="960" height="960" aria-label="Kamerabild mit Raster"></canvas>
+          <span class="badge" id="viewBadge">Keine Kamera</span>
+          <div class="review" id="review" hidden></div>
+        </div>
+        <div class="controls" id="reviewBar" hidden>
+          <button class="primary" id="accept" type="button">Übernehmen</button>
+          <button id="retake" type="button">Nochmal aufnehmen</button>
+          <p class="review-warn" id="reviewWarn" hidden></p>
+          <p class="review-hint">Feld anklicken wechselt zur nächstwahrscheinlichen Farbe. Leertaste übernimmt, Esc verwirft.</p>
+        </div>
+        <div class="controls" id="mainControls">
+          <button class="primary" id="capture" type="button" disabled>Seite aufnehmen</button>
+          <button id="startCam" type="button">Live-Kamera starten</button>
+          <label class="btn" for="photo">Foto aufnehmen<input id="photo" type="file" accept="image/*" capture="environment"></label>
+        </div>
+        <div class="zoom" id="camRow" hidden>
+          <label for="camSelect">Kamera</label><select id="camSelect"></select>
+        </div>
+        <div class="zoom" id="orientRow" hidden>
+          <button type="button" id="rotBtn">Bild drehen · 0°</button>
+          <button type="button" id="mirrorBtn" aria-pressed="true">Horizontal spiegeln: an</button>
+          <button type="button" id="mirrorVBtn" aria-pressed="false">Vertikal spiegeln: aus</button>
+        </div>
+        <div class="zoom" id="zoomRow" hidden>
+          <label for="zoom">Zoom</label><input id="zoom" type="range" min="1" max="5" step="0.01" value="1">
+          <span id="zoomVal">1,0×</span>
+        </div>
+        <p class="zoom" id="zoomHint" hidden>Mausrad zoomt, Bild ziehen verschiebt den Ausschnitt.</p>
+        <div class="imgfix" id="imgFix" hidden>
+          <div class="ctl"><label for="fixB">Helligkeit</label><input id="fixB" type="range" min="0.4" max="1.6" step="0.05" value="1"><output id="fixBv">1,00</output></div>
+          <div class="ctl"><label for="fixC">Kontrast</label><input id="fixC" type="range" min="0.6" max="2" step="0.05" value="1"><output id="fixCv">1,00</output></div>
+          <div class="ctl"><label for="fixS">Farbsättigung</label><input id="fixS" type="range" min="0.5" max="3" step="0.05" value="1"><output id="fixSv">1,00</output></div>
+          <p class="zoom">Bildkorrektur für helles oder blasses Licht. Sie gilt auch für die Farberkennung. <button type="button" class="linkish" id="resetFix">Zurücksetzen</button></p>
+        </div>
+        <p class="zoom" id="gridHint">Liegt die Würfelseite schräg im Bild, zieh die vier runden Griffe auf ihre Ecken. <button type="button" class="linkish" id="resetGrid">Raster zurücksetzen</button></p>
+        <details class="camset" id="camSet" hidden>
+          <summary>Kamera-Einstellungen</summary>
+          <div class="camset-body" id="camSetBody"></div>
+        </details>
+        <p class="zoom" id="camSetNote" hidden>Fokus, Belichtung und Farben der Kamera lassen sich in diesem Browser nicht einstellen. In Chrome oder Chromium erscheinen die Regler hier.</p>
+      </div>
+      <div class="side">
+        <div class="instr">
+          <div class="instr-text" aria-live="polite">
+            <span class="eyebrow" id="instrEyebrow">Seite 1 von 6</span>
+            <h3 id="instrTitle">Oberseite</h3>
+            <p id="instrText"></p>
+            <p class="notice" id="camNotice" hidden></p>
+          </div>
+          <div class="turn-guide" aria-hidden="true"><div class="tg-flip" id="tgFlip"><div class="tg-view"><div class="tg-cube" id="tgCube"></div></div></div></div>
+        </div>
+        <ul class="faces" id="faceList"></ul>
+        <details class="calib" id="calib">
+          <summary>Farben einlernen</summary>
+          <p>Halte ein Feld einer Farbe in das mittlere Kästchen des Rasters und klicke unten die passende Farbe an. Am besten nimmst du dafür die sechs Mittelfelder. Danach erkennt die App deine Farben von Anfang an zuverlässiger.</p>
+          <div class="palette" id="calibPal"></div>
+          <p class="calib-msg" id="calibMsg" aria-live="polite"></p>
+        </details>
+        <ul class="tips">
+          <li>Gleichmäßiges Tageslicht, keine Spiegelungen auf den Stickern.</li>
+          <li>Den Würfel so halten oder hinstellen, dass er das Raster genau ausfüllt. Mit Zoom und Verschieben passt du den Ausschnitt an.</li>
+          <li>Leertaste nimmt die Seite auf, so bleiben beide Hände am Würfel.</li>
+          <li>Eine Seite falsch? Tippe sie oben an und scanne sie neu.</li>
+          <li>Die App lernt aus deinen Korrekturen, wie die Farben bei deiner Kamera aussehen. <button type="button" class="linkish" id="resetColors">Gelernte Farben zurücksetzen</button></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 Check -->
+  <section class="panel" aria-labelledby="h-net">
+    <div class="panel-head">
+      <h2 id="h-net"><span class="step-no">2</span>Prüfen und korrigieren</h2>
+      <span class="tag" id="sourceTag">Beispielwürfel</span>
+    </div>
+    <div class="net-grid">
+      <div class="net-scroll"><div class="net" id="net"></div></div>
+      <div class="side">
+        <p class="muted">So sieht dein Würfel aufgeklappt aus: Vorne in der Mitte, daneben links, rechts und hinten, darüber oben und darunter unten. Ist ein Feld falsch, wähle unten die richtige Farbe und tippe das Feld an.</p>
+        <div class="palette" id="palette" role="group" aria-label="Farbe zum Korrigieren"></div>
+        <div class="status" id="status" aria-live="polite"></div>
+        <div><button class="primary" id="solveBtn" type="button" disabled>Lösung berechnen</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 Solve -->
+  <section class="panel" aria-labelledby="h-solve">
+    <div class="panel-head">
+      <h2 id="h-solve"><span class="step-no">3</span>Lösen</h2>
+      <span class="counter" id="solveCount"></span>
+    </div>
+    <div class="hold" id="holdHint"></div>
+    <div class="solve-grid">
+      <div class="stage" id="stage" aria-label="3D-Ansicht des Würfels, zum Drehen ziehen">
+        <div class="cube3d" id="cube3d"></div>
+      </div>
+      <div class="move-card">
+        <span class="counter" id="moveCounter">Noch keine Lösung</span>
+        <div class="move-big" id="moveBig">–</div>
+        <span class="notation" id="moveNotation"></span>
+        <p class="move-desc" id="moveDesc">Scanne deinen Würfel oder probiere es mit dem Beispielwürfel: Klicke auf „Lösung berechnen“.</p>
+        <div class="controls">
+          <button id="prev" type="button" disabled>Zurück</button>
+          <button class="primary" id="next" type="button" disabled>Weiter</button>
+        </div>
+        <div class="moves" id="moves"></div>
+        <p class="legend">Du schaust immer auf die Vorderseite. Die Pfeile zeigen, wohin sich die Ebene dabei bewegt: <b>↑ ↓ ← →</b> nach oben, unten, links oder rechts, <b>↻</b> im Uhrzeigersinn, <b>↺</b> gegen den Uhrzeigersinn. <b>2×</b> heißt halbe Drehung.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script data-cubejs src="js/cube.js"></script>
+<script>
+(() => {
+  "use strict";
+  // The solver files sit next to cube.js, wherever that was loaded from (CDN or the site itself).
+  // Absolute URLs, because the solver worker runs from a blob: URL.
+  const LIB_SRC = document.querySelector("script[data-cubejs]").src;
+  const CUBE_URL = new URL("cube.js", LIB_SRC).href;
+  const SOLVE_URL = new URL("solve.js", LIB_SRC).href;
+
+  // ---------- Cube model ----------
+  // Facelet order follows Kociemba: U R F D L B, each face read row by row as seen from outside.
+  const FACES = ["U", "R", "F", "D", "L", "B"];
+  // Scan order with a single quarter move between faces: Oben, Vorne, Rechts, Unten, Hinten, Links.
+  const SCAN_ORDER = ["U", "F", "R", "D", "B", "L"];
+  const SHORT_DE = { U: "Oben", R: "Rechts", F: "Vorne", D: "Unten", L: "Links", B: "Hinten" };
+  const FACE_DE = { U: "Oberseite", R: "Rechte Seite", F: "Vorderseite", D: "Unterseite", L: "Linke Seite", B: "Rückseite" };
+  const CANON = [
+    { name: "Weiß", hex: "#f2f3f5" },
+    { name: "Rot", hex: "#c8102e" },
+    { name: "Grün", hex: "#009b48" },
+    { name: "Gelb", hex: "#ffd500" },
+    { name: "Orange", hex: "#ff5800" },
+    { name: "Blau", hex: "#0046ad" },
+  ];
+  CANON.forEach(c => { c.lab = rgb2lab(hex2rgb(c.hex)); });
+  // Example uses the standard scheme: white top, green front, red right.
+  const CENTER_IDX = [4, 13, 22, 31, 40, 49];
+
+  const CF = [[8,9,20],[6,18,38],[0,36,47],[2,45,11],[29,26,15],[27,44,24],[33,53,42],[35,17,51]];
+  const CC = [[0,1,2],[0,2,4],[0,4,5],[0,5,1],[3,2,1],[3,4,2],[3,5,4],[3,1,5]];
+  const EF = [[5,10],[7,19],[3,37],[1,46],[32,16],[28,25],[30,43],[34,52],[23,12],[21,41],[50,39],[48,14]];
+  const EC = [[0,1],[0,2],[0,4],[0,5],[3,1],[3,2],[3,4],[3,5],[2,1],[2,4],[5,4],[5,1]];
+
+  // ---------- Cube orientation during the scan ----------
+  // World axes as the camera image (after the rotation setting, before mirroring): x right, y up, z toward the camera.
+  const NORMAL = { U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], R: [1, 0, 0], L: [-1, 0, 0] };
+  // Standard sticker order of each face (Kociemba): which neighbour is at the top and at the right.
+  const STD_TOP = { U: "B", F: "U", R: "U", D: "F", B: "U", L: "U" };
+  const mul = (A, B) => A.map(r => [0, 1, 2].map(j => r[0] * B[0][j] + r[1] * B[1][j] + r[2] * B[2][j]));
+  const apply = (M, v) => M.map(r => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]);
+  const ID = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  const TILT = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];   // the side at the bottom of the image comes to the camera
+  const TURN = [[0, 0, -1], [0, 1, 0], [1, 0, 0]];   // the side at the right of the image comes to the camera
+  const STEP_MOVE = { U: null, F: TILT, R: TURN, D: TILT, B: TURN, L: TILT };
+  const ORIENT = {};
+  (() => { let M = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]; SCAN_ORDER.forEach(f => { if (STEP_MOVE[f]) M = mul(STEP_MOVE[f], M); ORIENT[f] = M; }); })();
+  function faceAt(M, dir) { return Object.keys(NORMAL).find(f => apply(M, NORMAL[f]).every((v, i) => v === dir[i])); }
+  const rotCW = a => [6, 3, 0, 7, 4, 1, 8, 5, 2].map(i => a[i]);
+  // Quarter turns (clockwise) that bring a face, as captured in its scan position, into standard order.
+  // Turning the captured image clockwise k times moves what was on the left to the top.
+  function stdTurns(f) {
+    const dirs = [[0, 1, 0], [-1, 0, 0], [0, -1, 0], [1, 0, 0]];   // top, left, bottom, right in the image
+    for (let k = 0; k < 4; k++) if (faceAt(ORIENT[f], dirs[k]) === STD_TOP[f]) return k;
+    return 0;
+  }
+  function toStandard(f, arr) { let a = arr.slice(); for (let i = 0; i < stdTurns(f); i++) a = rotCW(a); return a; }
+
+  // Directions refer to the preview, so mirroring swaps left/right or top/bottom in the words.
+  function dispDir(d) {
+    const fx = !!(video && mirror), fy = !!(video && mirrorV);
+    if (fx && (d === "links" || d === "rechts")) return d === "links" ? "rechts" : "links";
+    if (fy && (d === "oben" || d === "unten")) return d === "oben" ? "unten" : "oben";
+    return d;
+  }
+  // Is the viewer following the planned sequence for this face (previous face just scanned)?
+  function inSequence(f) {
+    const i = SCAN_ORDER.indexOf(f);
+    return !scans[f] && (i === 0 ? SCAN_ORDER.every(g => !scans[g]) : !!scans[SCAN_ORDER[i - 1]] && SCAN_ORDER.slice(i).every(g => !scans[g]));
+  }
+  function centerName(f) { return scans[f] ? CANON[scans[f].labels[4]].name : null; }
+  function instrFor(f) {
+    if (inSequence(f)) {
+      if (f === SCAN_ORDER[0]) return `Halte eine beliebige Seite gerade zur Kamera. Das ist ab jetzt die Oberseite. Wichtig ist nur, dass du jede der sechs Seiten genau einmal aufnimmst. Ist eine Seite verdreht oder die Reihenfolge anders, korrigiert die App das selbst.`;
+      const dir = STEP_MOVE[f] === TILT ? "unten" : "rechts";
+      return `Dreh den Würfel eine Vierteldrehung, sodass die Seite, die im Bild ${dispDir(dir)} liegt, zur Kamera zeigt. Der kleine Würfel zeigt die Bewegung.`;
+    }
+    const top = faceAt(ORIENT[f], [0, 1, 0]), me = centerName(f), topName = centerName(top);
+    if (me && topName) return `Neu scannen: Halte die Seite mit der Mitte ${me} zur Kamera, sodass die Seite mit der Mitte ${topName} im Bild ${dispDir("oben")} liegt.`;
+    return "Scanne die Seiten am besten der Reihe nach. Diese Seite ist dran, sobald die Seite davor gescannt ist.";
+  }
+
+  // ---------- Turn guide: small 3D cube showing the move to the next face ----------
+  const tgCube = document.getElementById("tgCube"), tgFlip = document.getElementById("tgFlip");
+  let tgAnim = null;
+  // World (y up) to CSS (y down) and into a matrix3d string (column-major).
+  function cssMatrix(M) {
+    const sg = [1, -1, 1], c = (i, j) => sg[i] * M[i][j] * sg[j];
+    return `matrix3d(${c(0, 0)},${c(1, 0)},${c(2, 0)},0,${c(0, 1)},${c(1, 1)},${c(2, 1)},0,${c(0, 2)},${c(1, 2)},${c(2, 2)},0,0,0,0,1)`;
+  }
+  function buildGuide() {
+    FACES.forEach(f => {
+      const el = document.createElement("div"); el.className = "tg-f"; el.dataset.f = f;
+      for (let k = 0; k < 9; k++) el.appendChild(document.createElement("i"));
+      tgCube.appendChild(el);
+    });
+  }
+  function renderGuide() {
+    tgFlip.style.transform = `scale(${(video && mirror) ? -1 : 1}, ${(video && mirrorV) ? -1 : 1})`;
+    tgCube.querySelectorAll(".tg-f").forEach(el => {
+      // Every sticker as scanned (stored in standard order, which matches the face layout).
+      const f = el.dataset.f, sc = scans[f];
+      el.classList.toggle("target", f === currentFace);
+      el.classList.toggle("unknown", !sc);
+      el.querySelectorAll("i").forEach((i, k) => { i.style.background = sc ? CANON[sc.labels[k]].hex : ""; });
+    });
+    if (tgAnim) { tgAnim.cancel(); tgAnim = null; }
+    const end = cssMatrix(ORIENT[currentFace]);
+    const prev = SCAN_ORDER[SCAN_ORDER.indexOf(currentFace) - 1];
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tgCube.style.transform = end;
+    if (inSequence(currentFace) && prev && !reduce && tgCube.animate) {
+      const start = cssMatrix(ORIENT[prev]);
+      tgAnim = tgCube.animate([
+        { transform: start, offset: 0 }, { transform: start, offset: 0.25 },
+        { transform: end, offset: 0.75 }, { transform: end, offset: 1 },
+      ], { duration: 2600, iterations: Infinity, easing: "ease-in-out" });
+    }
+  }
+
+  let facelets = solvedFacelets();   // 54 colour labels (index into CANON), confirmed by the viewer
+  let source = "example";            // "example" | "scan"
+  let scans = {};                    // face -> { lab: [9], rgb: [9] }
+  let currentFace = SCAN_ORDER[0];
+  let paint = 0;
+  let solution = null;               // { moves: [], states: [] }
+  let step = 0;
+
+  function solvedFacelets() { const a = []; for (let i = 0; i < 54; i++) a.push(Math.floor(i / 9)); return a; }
+  function centersOf(fl) { return CENTER_IDX.map(i => fl[i]); }
+  // Cube string for the solver: each sticker named after the face whose centre has its colour.
+  function toString(fl) { const cc = centersOf(fl); return fl.map(c => FACES[cc.indexOf(c)]).join(""); }
+  function labelsFromString(s, cc) { return s.split("").map(ch => cc[FACES.indexOf(ch)]); }
+  function colorOf(c) { return CANON[c]; }
+
+  // ---------- Colour math ----------
+  function hex2rgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+  function rgb2lab([r, g, b]) {
+    const lin = v => { v /= 255; return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92; };
+    const R = lin(r), G = lin(g), B = lin(b);
+    let x = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047;
+    let y = (R * 0.2126 + G * 0.7152 + B * 0.0722);
+    let z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;
+    const f = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    x = f(x); y = f(y); z = f(z);
+    return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+  }
+  // Colour distance that weighs hue most: shadows change lightness and saturation, rarely the hue.
+  function dist(a, b) {
+    const dL = a[0] - b[0], C1 = Math.hypot(a[1], a[2]), C2 = Math.hypot(b[1], b[2]), dC = C1 - C2;
+    const dH2 = Math.max(0, (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2 - dC * dC);
+    return Math.sqrt((dL * 0.4) ** 2 + (dC * 0.5) ** 2 + dH2);
+  }
+
+  // ---------- Learned colour examples ----------
+  // Every confirmed sticker is kept as an example of its colour, so the app learns how this camera
+  // and this light show each colour. Ideal colours are the fallback until examples exist.
+  const REF_KEY = "wuerfel-scanner-farben-v2", MAX_EXAMPLES = 24;
+  let examples = [[], [], [], [], [], []];
+  try {
+    const r = JSON.parse(localStorage.getItem(REF_KEY));
+    if (r && Array.isArray(r.examples) && r.examples.length === 6) examples = r.examples;
+  } catch (e) {}
+  function saveRefs() { try { localStorage.setItem(REF_KEY, JSON.stringify({ examples })); } catch (e) {} }
+  function colorDist(lab, c) {
+    let d = dist(lab, CANON[c].lab) + 6;
+    for (const ex of examples[c]) d = Math.min(d, dist(lab, ex));
+    return d;
+  }
+  // First entry: the detected colour. The rest is the click order for corrections, sorted by plain
+  // Lab distance so that neighbours like yellow and orange or red and orange come one click apart.
+  function labDist(a, b) { const dl = (a[0] - b[0]) * 0.5; return Math.sqrt(dl * dl + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2); }
+  function rankColors(lab) {
+    const d = [0, 1, 2, 3, 4, 5].map(c => colorDist(lab, c));
+    const best = [0, 1, 2, 3, 4, 5].sort((a, b) => d[a] - d[b])[0];
+    const near = c => Math.min(labDist(lab, CANON[c].lab), ...examples[c].map(ex => labDist(lab, ex)));
+    return [best, ...[0, 1, 2, 3, 4, 5].filter(c => c !== best).sort((a, b) => near(a) - near(b))];
+  }
+  function learnFace(sample, labels) {
+    labels.forEach((c, k) => {
+      examples[c].push(sample.lab[k].map(v => Math.round(v * 10) / 10));
+      if (examples[c].length > MAX_EXAMPLES) examples[c].shift();
+    });
+    saveRefs();
+  }
+
+  // ---------- Validation ----------
+  function validate(lab) {
+    const errors = [], bad = new Set();
+    const centers = centersOf(lab);
+    const dupCenters = centers.filter((c, i) => centers.indexOf(c) !== i);
+    if (dupCenters.length) {
+      CENTER_IDX.forEach(i => { if (dupCenters.includes(lab[i])) bad.add(i); });
+      errors.push("Zwei Mittelfelder haben dieselbe Farbe (" + [...new Set(dupCenters)].map(c => colorOf(c).name).join(", ") + "). Jede Seite hat eine andere Mittelfarbe. Korrigiere das Mittelfeld oder scanne die Seite neu.");
+      return { ok: false, errors, bad };
+    }
+    const counts = [0, 0, 0, 0, 0, 0]; lab.forEach(c => counts[c]++);
+    const off = counts.map((n, c) => ({ n, c })).filter(x => x.n !== 9);
+    if (off.length) {
+      errors.push("Jede Farbe muss genau 9-mal vorkommen: " + off.map(x => `${colorOf(x.c).name} ${x.n}×`).join(", ") + ".");
+      return { ok: false, errors, bad };
+    }
+    const fl = lab.map(c => centers.indexOf(c));   // colour labels -> face classes
+    const cp = [], co = [], ep = [], eo = [];
+    CF.forEach((pos, i) => {
+      const cols = pos.map(f => fl[f]);
+      const oris = [0, 1, 2].filter(k => cols[k] === 0 || cols[k] === 3);
+      let found = -1;
+      if (oris.length === 1) {
+        const o = oris[0];
+        found = CC.findIndex(c => c[0] === cols[o] && c[1] === cols[(o + 1) % 3] && c[2] === cols[(o + 2) % 3]);
+        co[i] = o;
+      }
+      if (found < 0) { pos.forEach(f => bad.add(f)); cp[i] = -1; } else cp[i] = found;
+    });
+    EF.forEach((pos, i) => {
+      const a = fl[pos[0]], b = fl[pos[1]];
+      let found = EC.findIndex(e => e[0] === a && e[1] === b);
+      if (found >= 0) eo[i] = 0;
+      else { found = EC.findIndex(e => e[0] === b && e[1] === a); eo[i] = 1; }
+      if (found < 0) { pos.forEach(f => bad.add(f)); ep[i] = -1; } else ep[i] = found;
+    });
+    if (bad.size) { errors.push("Einige Ecken oder Kanten haben eine Farbkombination, die es auf einem Würfel nicht gibt. Die markierten Felder prüfen."); return { ok: false, errors, bad }; }
+    const dupC = cp.filter((v, i) => cp.indexOf(v) !== i), dupE = ep.filter((v, i) => ep.indexOf(v) !== i);
+    if (dupC.length || dupE.length) {
+      CF.forEach((pos, i) => { if (dupC.includes(cp[i])) pos.forEach(f => bad.add(f)); });
+      EF.forEach((pos, i) => { if (dupE.includes(ep[i])) pos.forEach(f => bad.add(f)); });
+      errors.push("Ein Eck- oder Kantenstein kommt doppelt vor. Die markierten Felder prüfen.");
+      return { ok: false, errors, bad };
+    }
+    if (co.reduce((a, b) => a + b, 0) % 3) errors.push("Eine Ecke ist verdreht. Das passiert meist durch einen Scanfehler, selten durch einen umgebauten Würfel.");
+    if (eo.reduce((a, b) => a + b, 0) % 2) errors.push("Eine Kante ist gekippt. Prüfe die Kantenfelder oder scanne eine Seite neu.");
+    if (parity(cp) !== parity(ep)) errors.push("Zwei Steine sind vertauscht. Prüfe, ob du jede Seite in der richtigen Ausrichtung gescannt hast.");
+    return { ok: errors.length === 0, errors, bad };
+  }
+  // Fast yes/no check of a full sticker layout, used while searching for the right assembly.
+  function fastValid(lab) {
+    const ctr = CENTER_IDX.map(i => lab[i]);
+    if (new Set(ctr).size < 6) return false;
+    const cls = x => ctr.indexOf(x);
+    const cp = [], ep = []; let co = 0, eo = 0, used = 0;
+    for (let i = 0; i < 8; i++) {
+      const cols = CF[i].map(f => cls(lab[f]));
+      let o = -1;
+      for (let k = 0; k < 3; k++) if (cols[k] === 0 || cols[k] === 3) { if (o >= 0) return false; o = k; }
+      if (o < 0) return false;
+      const j = CC.findIndex(c => c[0] === cols[o] && c[1] === cols[(o + 1) % 3] && c[2] === cols[(o + 2) % 3]);
+      if (j < 0 || (used >> j) & 1) return false;
+      used |= 1 << j; cp.push(j); co += o;
+    }
+    if (co % 3) return false;
+    used = 0;
+    for (let i = 0; i < 12; i++) {
+      const a = cls(lab[EF[i][0]]), b = cls(lab[EF[i][1]]);
+      let j = EC.findIndex(e => e[0] === a && e[1] === b), o = 0;
+      if (j < 0) { j = EC.findIndex(e => e[0] === b && e[1] === a); o = 1; }
+      if (j < 0 || (used >> j) & 1) return false;
+      used |= 1 << j; ep.push(j); eo += o;
+    }
+    return eo % 2 === 0 && parity(cp) === parity(ep);
+  }
+  // Puts the six scanned faces together even if some were scanned in the wrong order or turned.
+  // The first scan stays the top face as captured (that fixes the whole cube's orientation); every other
+  // scan may go to any position in any of four turns. Prefers the layout closest to the planned one.
+  function assemble(grids /* label arrays in SCAN_ORDER */) {
+    const planned = new Array(54);
+    SCAN_ORDER.forEach((f, gi) => grids[gi].forEach((c, k) => { planned[FACES.indexOf(f) * 9 + k] = c; }));
+    if (fastValid(planned)) return { lab: planned, moved: 0, turned: 0 };
+    const rots = grids.map(g => { const r = [g]; for (let i = 1; i < 4; i++) r.push(rotCW(r[i - 1])); return r; });
+    const anchor = SCAN_ORDER.indexOf("U"), others = [0, 1, 2, 3, 4, 5].filter(i => i !== anchor);
+    const slots = ["R", "F", "D", "L", "B"].map(f => FACES.indexOf(f));
+    const lab = new Array(54);
+    rots[anchor][0].forEach((c, k) => { lab[FACES.indexOf("U") * 9 + k] = c; });
+    let best = null;
+    const perms = [];
+    (function permute(arr, cur) { if (!arr.length) { perms.push(cur); return; } arr.forEach((x, i) => permute(arr.filter((_, j) => j !== i), cur.concat(x))); })(others, []);
+    for (const perm of perms) {
+      for (let code = 0; code < 1024; code++) {
+        let turned = 0;
+        for (let s2 = 0; s2 < 5; s2++) {
+          const r = (code >> (2 * s2)) & 3; if (r) turned++;
+          const g = rots[perm[s2]][r], base = slots[s2] * 9;
+          for (let k = 0; k < 9; k++) lab[base + k] = g[k];
+        }
+        if (!fastValid(lab)) continue;
+        const moved = perm.filter((g, s2) => FACES.indexOf(SCAN_ORDER[g]) !== slots[s2]).length;
+        const cost = moved * 10 + turned;
+        if (!best || cost < best.cost) best = { lab: lab.slice(), moved, turned, cost };
+      }
+    }
+    return best;
+  }
+  function parity(p) { let s = 0; for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) if (p[i] > p[j]) s++; return s % 2; }
+  function isSolved(fl) { return fl.every((c, i) => c === fl[9 * Math.floor(i / 9) + 4]); }
+
+  // ---------- Solver (Web Worker with main-thread fallback) ----------
+  const solver = { ready: false, worker: null, pending: null, mainThread: false };
+  const chip = document.getElementById("solverChip"), chipText = document.getElementById("solverText");
+  function setChip(state, text) { chip.dataset.state = state; chipText.textContent = text; }
+  function startSolver() {
+    try {
+      const src = `importScripts(${JSON.stringify(CUBE_URL)}, ${JSON.stringify(SOLVE_URL)});
+        Cube.initSolver(); postMessage({ type: "ready" });
+        onmessage = e => { try { postMessage({ type: "done", id: e.data.id, s: Cube.fromString(e.data.str).solve() }); }
+          catch (err) { postMessage({ type: "fail", id: e.data.id, msg: String(err) }); } };`;
+      const w = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+      solver.worker = w;
+      w.onmessage = e => {
+        const d = e.data;
+        if (d.type === "ready") { solver.ready = true; setChip("ready", "Löser bereit"); refreshSolveBtn(); }
+        else if (solver.pending && d.id === solver.pending.id) { const p = solver.pending; solver.pending = null; d.type === "done" ? p.resolve(d.s) : p.reject(new Error(d.msg)); }
+      };
+      w.onerror = ev => { ev.preventDefault?.(); if (!solver.ready) fallbackMain(); };
+    } catch (e) { fallbackMain(); }
+  }
+  function fallbackMain() {
+    if (solver.mainThread) return;
+    solver.mainThread = true; solver.worker = null;
+    setChip("loading", "Löser wird vorbereitet (kann kurz ruckeln) …");
+    const s = document.createElement("script"); s.src = SOLVE_URL;
+    s.onload = () => setTimeout(() => {
+      try { Cube.initSolver(); solver.ready = true; setChip("ready", "Löser bereit"); refreshSolveBtn(); }
+      catch (e) { setChip("error", "Löser konnte nicht starten"); }
+    }, 60);
+    s.onerror = () => setChip("error", "Löser nicht erreichbar. Internetverbindung prüfen.");
+    document.head.appendChild(s);
+  }
+  function solveString(str) {
+    if (solver.mainThread) return new Promise((res, rej) => setTimeout(() => { try { res(Cube.fromString(str).solve()); } catch (e) { rej(e); } }, 30));
+    return new Promise((resolve, reject) => {
+      const id = Date.now();
+      solver.pending = { id, resolve, reject };
+      solver.worker.postMessage({ id, str });
+      setTimeout(() => { if (solver.pending && solver.pending.id === id) { solver.pending = null; reject(new Error("timeout")); } }, 30000);
+    });
+  }
+
+  // ---------- Camera / photo ----------
+  const view = document.getElementById("view"), vctx = view.getContext("2d");
+  const work = document.createElement("canvas"); work.width = work.height = 480;
+  const wctx = work.getContext("2d", { willReadFrequently: true });
+  const badge = document.getElementById("viewBadge");
+  const camNotice = document.getElementById("camNotice");
+  const captureBtn = document.getElementById("capture");
+  const zoomRow = document.getElementById("zoomRow"), zoomEl = document.getElementById("zoom");
+  let video = null, stream = null, photo = null, live = [], frame = 0, mirror = false;
+  // Visible crop of the source: zoom factor and pan offset in source pixels.
+  let crop = { zoom: 1, ox: 0, oy: 0 };
+  const zoomHint = document.getElementById("zoomHint"), zoomVal = document.getElementById("zoomVal");
+  const CROP_KEY = "wuerfel-scanner-webcam-crop";
+  function loadCamCrop() { try { const c = JSON.parse(localStorage.getItem(CROP_KEY)); if (c && c.zoom >= 1) return c; } catch (e) {} return { zoom: 1, ox: 0, oy: 0 }; }
+  function saveCamCrop() { if (!video) return; try { localStorage.setItem(CROP_KEY, JSON.stringify(crop)); } catch (e) {} }
+  function setZoom(z) {
+    crop.zoom = Math.max(1, Math.min(5, z));
+    zoomEl.value = crop.zoom; zoomVal.textContent = crop.zoom.toFixed(1).replace(".", ",") + "×";
+    saveCamCrop();
+  }
+  function showZoom(on) { zoomRow.hidden = !on; zoomHint.hidden = !on; document.getElementById("imgFix").hidden = !on; }
+
+  // Software image correction (canvas filter): works in every browser, also where the camera itself
+  // cannot be adjusted. It is applied before sampling, so it changes what the colour detection sees.
+  const FIX_KEY = "wuerfel-scanner-bildkorrektur";
+  let fix = { b: 1, c: 1, s: 1 };
+  try { const f = JSON.parse(localStorage.getItem(FIX_KEY)); if (f && [f.b, f.c, f.s].every(Number.isFinite)) fix = f; } catch (e) {}
+  function filterStr() { return (fix.b === 1 && fix.c === 1 && fix.s === 1) ? "none" : `brightness(${fix.b}) contrast(${fix.c}) saturate(${fix.s})`; }
+  function syncFix() {
+    [["b", "fixB"], ["c", "fixC"], ["s", "fixS"]].forEach(([k, id]) => {
+      document.getElementById(id).value = fix[k];
+      document.getElementById(id + "v").textContent = fix[k].toFixed(2).replace(".", ",");
+    });
+  }
+  [["b", "fixB"], ["c", "fixC"], ["s", "fixS"]].forEach(([k, id]) => {
+    document.getElementById(id).addEventListener("input", e => {
+      fix[k] = +e.target.value; syncFix();
+      try { localStorage.setItem(FIX_KEY, JSON.stringify(fix)); } catch (err) {}
+    });
+  });
+  document.getElementById("resetFix").addEventListener("click", () => {
+    fix = { b: 1, c: 1, s: 1 }; syncFix();
+    try { localStorage.setItem(FIX_KEY, JSON.stringify(fix)); } catch (err) {}
+  });
+  syncFix();
+
+  // Webcam orientation: rotation fixes a camera that sits upside down or sideways and applies
+  // to both the preview and the scan; mirroring only changes the preview.
+  const ORIENT_KEY = "wuerfel-scanner-webcam-orient";
+  const orientRow = document.getElementById("orientRow"), rotBtn = document.getElementById("rotBtn"), mirrorBtn = document.getElementById("mirrorBtn");
+  const mirrorVBtn = document.getElementById("mirrorVBtn");
+  let rotation = 0, mirrorPref = null, mirrorV = false;
+  try {
+    const o = JSON.parse(localStorage.getItem(ORIENT_KEY));
+    if (o) { rotation = [0, 90, 180, 270].includes(o.rot) ? o.rot : 0; mirrorPref = typeof o.mirror === "boolean" ? o.mirror : null; mirrorV = o.mirrorV === true; }
+  } catch (e) {}
+  function saveOrient() { try { localStorage.setItem(ORIENT_KEY, JSON.stringify({ rot: rotation, mirror: mirrorPref, mirrorV })); } catch (e) {} }
+  function updateOrientUI() {
+    rotBtn.textContent = `Bild drehen · ${rotation}°`;
+    mirrorBtn.setAttribute("aria-pressed", String(mirror));
+    mirrorBtn.textContent = `Horizontal spiegeln: ${mirror ? "an" : "aus"}`;
+    mirrorVBtn.setAttribute("aria-pressed", String(mirrorV));
+    mirrorVBtn.textContent = `Vertikal spiegeln: ${mirrorV ? "an" : "aus"}`;
+  }
+  rotBtn.addEventListener("click", () => { rotation = (rotation + 90) % 360; saveOrient(); updateOrientUI(); renderScanUI(); });
+  mirrorBtn.addEventListener("click", () => { mirror = !mirror; mirrorPref = mirror; saveOrient(); updateOrientUI(); updateBadge(); renderScanUI(); });
+  mirrorVBtn.addEventListener("click", () => { mirrorV = !mirrorV; saveOrient(); updateOrientUI(); updateBadge(); renderScanUI(); });
+  // Preview flips only. Maps between crop coordinates (what is sampled) and the preview; it is its own inverse.
+  function toView([x, y]) { return [(video && mirror) ? 1 - x : x, (video && mirrorV) ? 1 - y : y]; }
+  const camRow = document.getElementById("camRow"), camSelect = document.getElementById("camSelect");
+  // The scan grid is a quadrilateral with draggable corners (in crop coordinates 0..1, before mirroring),
+  // so a face seen at an angle is still split into its nine stickers.
+  const GRID_KEY = "wuerfel-scanner-raster";
+  const DEF_CORNERS = [[0.14, 0.14], [0.86, 0.14], [0.86, 0.86], [0.14, 0.86]];
+  let corners = DEF_CORNERS.map(p => p.slice());
+  try {
+    const g = JSON.parse(localStorage.getItem(GRID_KEY));
+    if (Array.isArray(g) && g.length === 4 && g.every(p => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite))) corners = g;
+  } catch (e) {}
+  function saveGrid() { try { localStorage.setItem(GRID_KEY, JSON.stringify(corners)); } catch (e) {} }
+  // Projective map from the unit square to the quad (Heckbert): (0,0) TL, (1,0) TR, (1,1) BR, (0,1) BL.
+  function quadMap(p) {
+    const [[x0, y0], [x1, y1], [x2, y2], [x3, y3]] = p;
+    const dx1 = x1 - x2, dx2 = x3 - x2, dx3 = x0 - x1 + x2 - x3, dy1 = y1 - y2, dy2 = y3 - y2, dy3 = y0 - y1 + y2 - y3;
+    let g = 0, h = 0;
+    const den = dx1 * dy2 - dx2 * dy1;
+    if ((dx3 || dy3) && Math.abs(den) > 1e-9) { g = (dx3 * dy2 - dx2 * dy3) / den; h = (dx1 * dy3 - dx3 * dy1) / den; }
+    const a = x1 - x0 + g * x1, b = x3 - x0 + h * x3, d = y1 - y0 + g * y1, e = y3 - y0 + h * y3;
+    return (u, v) => { const w = g * u + h * v + 1; return [(a * u + b * v + x0) / w, (d * u + e * v + y0) / w]; };
+  }
+  document.getElementById("resetGrid").addEventListener("click", () => { corners = DEF_CORNERS.map(p => p.slice()); saveGrid(); });
+
+  async function startCamera(deviceId) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return camFail();
+    try {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      const base = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } };
+      stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign(base, { width: { ideal: 1920 }, height: { ideal: 1080 }, zoom: true }), audio: false });
+      const track = stream.getVideoTracks()[0], settings = track.getSettings ? track.getSettings() : {};
+      // Webcams facing the user are shown like a mirror; sampling always reads the unmirrored frame.
+      mirror = mirrorPref != null ? mirrorPref : settings.facingMode !== "environment";
+      fillCameraList(settings.deviceId);
+      video = document.createElement("video");
+      video.playsInline = true; video.muted = true; video.srcObject = stream;
+      await video.play();
+      await ensureResolution(track);
+      video.addEventListener("resize", updateBadge);
+      photo = null; camNotice.hidden = true;
+      crop = loadCamCrop(); setZoom(crop.zoom); showZoom(true);
+      updateBadge();
+      orientRow.hidden = false; updateOrientUI(); renderScanUI();
+      buildCamSettings(track);
+      captureBtn.disabled = false;
+      document.getElementById("startCam").textContent = "Kamera stoppen";
+    } catch (e) { camFail(); }
+  }
+  function stopCamera() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null; video = null; camRow.hidden = true; orientRow.hidden = true;
+    document.getElementById("camSet").hidden = true; document.getElementById("camSetNote").hidden = true;
+    if (!photo) showZoom(false);
+    document.getElementById("startCam").textContent = "Live-Kamera starten";
+    if (!photo) { badge.textContent = "Keine Kamera"; captureBtn.disabled = true; }
+  }
+  function updateBadge() {
+    if (!video) return;
+    badge.textContent = `Live · ${video.videoWidth}×${video.videoHeight}` + (mirror || mirrorV ? " · gespiegelt" : "");
+  }
+  // Some browsers start low; ask for HD explicitly if the first frame is small.
+  async function ensureResolution(track) {
+    if (video.videoWidth >= 1280) return;
+    for (const [w, h] of [[1920, 1080], [1280, 720]]) {
+      try { await track.applyConstraints({ width: { exact: w }, height: { exact: h } }); await new Promise(r => setTimeout(r, 300)); return; } catch (e) {}
+    }
+  }
+
+  // Hardware controls the browser exposes for this camera (Chromium on most UVC webcams).
+  const CTL = [
+    { key: "zoom", label: "Kamera-Zoom" },
+    { key: "focusDistance", label: "Fokus", mode: "focusMode" },
+    { key: "exposureCompensation", label: "Belichtung" },
+    { key: "exposureTime", label: "Belichtungszeit", mode: "exposureMode" },
+    { key: "brightness", label: "Helligkeit" },
+    { key: "contrast", label: "Kontrast" },
+    { key: "saturation", label: "Farbsättigung" },
+    { key: "sharpness", label: "Schärfe" },
+    { key: "colorTemperature", label: "Farbtemperatur", mode: "whiteBalanceMode" },
+  ];
+  const AUTO = [["focusMode", "Autofokus"], ["exposureMode", "Automatische Belichtung"], ["whiteBalanceMode", "Automatischer Weißabgleich"]];
+  function buildCamSettings(track) {
+    const body = document.getElementById("camSetBody"), box = document.getElementById("camSet"), note = document.getElementById("camSetNote");
+    body.innerHTML = ""; let n = 0;
+    let caps = {}; try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch (e) {}
+    const st = track.getSettings ? track.getSettings() : {};
+    const apply = async cons => { try { await track.applyConstraints({ advanced: [cons] }); } catch (e) {} };
+    const autoBoxes = {};
+    AUTO.forEach(([k, label]) => {
+      const modes = caps[k];
+      if (!Array.isArray(modes) || !modes.includes("manual")) return;
+      const autoVal = modes.includes("continuous") ? "continuous" : modes.includes("single-shot") ? "single-shot" : null;
+      if (!autoVal) return;
+      const row = document.createElement("label"); row.className = "ctl-check";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "cs-" + k; cb.checked = st[k] !== "manual";
+      cb.addEventListener("change", () => apply({ [k]: cb.checked ? autoVal : "manual" }));
+      row.append(cb, document.createTextNode(label)); body.appendChild(row); autoBoxes[k] = cb; n++;
+    });
+    CTL.forEach(c => {
+      const cap = caps[c.key];
+      if (!cap || typeof cap.max !== "number" || !(cap.max > cap.min)) return;
+      const row = document.createElement("div"); row.className = "ctl";
+      const lab = document.createElement("label"); lab.htmlFor = "cs-" + c.key; lab.textContent = c.label;
+      const inp = document.createElement("input"); inp.type = "range"; inp.id = "cs-" + c.key;
+      inp.min = cap.min; inp.max = cap.max; inp.step = cap.step || (cap.max - cap.min) / 100;
+      inp.value = st[c.key] != null ? st[c.key] : cap.min;
+      const out = document.createElement("output");
+      const fmt = () => { const v = +inp.value; out.textContent = Number.isInteger(+inp.step) ? String(Math.round(v)) : v.toFixed(2); };
+      fmt();
+      inp.addEventListener("input", () => {
+        fmt();
+        const cons = { [c.key]: +inp.value };
+        if (c.mode && autoBoxes[c.mode]) { cons[c.mode] = "manual"; autoBoxes[c.mode].checked = false; }
+        apply(cons);
+      });
+      row.append(lab, inp, out); body.appendChild(row); n++;
+    });
+    box.hidden = n === 0; note.hidden = n > 0;
+  }
+
+  async function fillCameraList(activeId) {
+    try {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+      camSelect.innerHTML = "";
+      cams.forEach((d, i) => {
+        const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || `Kamera ${i + 1}`;
+        if (d.deviceId === activeId) o.selected = true;
+        camSelect.appendChild(o);
+      });
+      camRow.hidden = cams.length < 2;
+    } catch (e) { camRow.hidden = true; }
+  }
+  camSelect.addEventListener("change", () => startCamera(camSelect.value));
+  function camFail() {
+    camNotice.hidden = false;
+    camNotice.textContent = "Die Live-Kamera ist hier nicht verfügbar. Tippe auf „Foto aufnehmen“: Auf dem Handy öffnet sich die Kamera, am Computer kannst du ein Foto auswählen.";
+  }
+  document.getElementById("startCam").addEventListener("click", () => stream ? stopCamera() : startCamera());
+
+  document.getElementById("photo").addEventListener("change", e => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      stopCamera();
+      photo = { img };
+      crop = { zoom: 1, ox: 0, oy: 0 }; setZoom(1); showZoom(true);
+      badge.textContent = "Foto · " + FACE_DE[currentFace];
+      captureBtn.disabled = false;
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+    e.target.value = "";
+  });
+  zoomEl.addEventListener("input", () => setZoom(+zoomEl.value));
+  view.addEventListener("wheel", e => {
+    if (!video && !photo) return;
+    e.preventDefault();
+    setZoom(crop.zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+  }, { passive: false });
+  function sourceSize() { return video ? [video.videoWidth, video.videoHeight] : photo ? [photo.img.width, photo.img.height] : null; }
+
+  // Drag to pan the photo.
+  let drag = null;
+  function viewPoint(e) { const r = view.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; }
+  view.addEventListener("pointerdown", e => {
+    const [px, py] = viewPoint(e);
+    let best = -1, bd = 0.065;
+    corners.forEach((c, k) => { const [x, y] = toView(c); const d = Math.hypot(x - px, y - py); if (d < bd) { bd = d; best = k; } });
+    if (best >= 0) drag = { corner: best };
+    else if (photo || video) drag = { x: e.clientX, y: e.clientY };
+    else return;
+    view.setPointerCapture(e.pointerId);
+  });
+  view.addEventListener("pointermove", e => {
+    if (drag && drag.corner != null) {
+      const [px, py] = viewPoint(e), cx = Math.max(0.01, Math.min(0.99, px)), cy = Math.max(0.01, Math.min(0.99, py));
+      corners[drag.corner] = toView([cx, cy]);
+      return;
+    }
+    const size = sourceSize();
+    if (!drag || !size) return;
+    const s = Math.min(size[0], size[1]) / crop.zoom;
+    const k = s / view.getBoundingClientRect().width;
+    // Map the screen drag back through mirror and rotation so the picture follows the pointer.
+    let dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
+    if (video && mirror) dx = -dx;
+    if (video && mirrorV) dy = -dy;
+    const t = (video ? rotation : 0) * Math.PI / 180, c = Math.cos(t), sn = Math.sin(t);
+    crop.ox -= dx * c + dy * sn; crop.oy -= -dx * sn + dy * c;
+    drag = { x: e.clientX, y: e.clientY };
+  });
+  view.addEventListener("pointerup", () => { if (drag && drag.corner != null) saveGrid(); else saveCamCrop(); drag = null; });
+  view.addEventListener("pointercancel", () => { drag = null; });
+
+  function currentSource() {
+    if (video && video.readyState >= 2) return { src: video, w: video.videoWidth, h: video.videoHeight };
+    if (photo) return { src: photo.img, w: photo.img.width, h: photo.img.height };
+    return null;
+  }
+  function cropRect(w, h) {
+    const s = Math.min(w, h) / crop.zoom;
+    crop.ox = Math.max(-(w - s) / 2, Math.min((w - s) / 2, crop.ox));
+    crop.oy = Math.max(-(h - s) / 2, Math.min((h - s) / 2, crop.oy));
+    return [(w - s) / 2 + crop.ox, (h - s) / 2 + crop.oy, s];
+  }
+  // Draws the square crop into ctx: camera rotation first, then the optional preview mirror.
+  function drawCrop(ctx, S, flipX, flipY) {
+    const cs = currentSource(); if (!cs) return false;
+    const [sx, sy, s] = cropRect(cs.w, cs.h);
+    const rot = video ? rotation : 0;
+    ctx.save(); ctx.translate(S / 2, S / 2);
+    if (flipX || flipY) ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
+    if (rot) ctx.rotate(rot * Math.PI / 180);
+    ctx.filter = filterStr();
+    ctx.drawImage(cs.src, sx, sy, s, s, -S / 2, -S / 2, S, S);
+    ctx.restore();
+    return true;
+  }
+  function drawSource() { return drawCrop(wctx, work.width, false); }
+  // Reads the middle of each sticker through the quad. The brightest quarter of the pixels (glare on
+  // worn or glossy stickers) and the darkest tenth (edges, dirt) are dropped before taking the median.
+  function sampleWork() {
+    const S = work.width, d = wctx.getImageData(0, 0, S, S).data, H = quadMap(corners), N = 8;
+    const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
+    const rgb = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const px = [];
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+        const [x, y] = H((c + 0.28 + 0.44 * i / (N - 1)) / 3, (r + 0.28 + 0.44 * j / (N - 1)) / 3);
+        const X = Math.max(0, Math.min(S - 1, Math.round(x * S))), Y = Math.max(0, Math.min(S - 1, Math.round(y * S))), o = (Y * S + X) * 4;
+        px.push([d[o], d[o + 1], d[o + 2]]);
+      }
+      px.sort((a, b) => (a[0] * 2 + a[1] * 3 + a[2]) - (b[0] * 2 + b[1] * 3 + b[2]));
+      const keep = px.slice(Math.floor(px.length * 0.1), Math.ceil(px.length * 0.75));
+      rgb.push([0, 1, 2].map(ch => med(keep.map(p => p[ch]))));
+    }
+    return { rgb, lab: rgb.map(rgb2lab) };
+  }
+  function render() {
+    if (review) { requestAnimationFrame(render); return; }
+    const S = view.width, u = S / 480, H = quadMap(corners);
+    const toD = p => { const [x, y] = toView(p); return [x * S, y * S]; };
+    const quad = corners.map(toD);
+    const cs = currentSource();
+    if (cs) {
+      vctx.imageSmoothingQuality = "high";
+      drawCrop(vctx, S, !!(video && mirror), !!(video && mirrorV));
+      if (frame++ % 6 === 0) { drawSource(); live = sampleWork().rgb; }
+      vctx.fillStyle = "rgba(0,0,0,0.35)";
+      vctx.beginPath(); vctx.rect(0, 0, S, S); vctx.moveTo(...quad[0]); quad.slice(1).forEach(p => vctx.lineTo(...p)); vctx.closePath();
+      vctx.fill("evenodd");
+    } else {
+      vctx.fillStyle = "#16181d"; vctx.fillRect(0, 0, S, S);
+      vctx.fillStyle = "#8a93a0"; vctx.font = `600 ${18 * u}px 'IBM Plex Sans', sans-serif`; vctx.textAlign = "center";
+      vctx.fillText("Kamera starten oder Foto aufnehmen", S / 2, S * 0.94);
+      live = [];
+    }
+    vctx.strokeStyle = "rgba(255,255,255,0.9)"; vctx.lineWidth = 3 * u;
+    for (let i = 0; i <= 3; i++) {
+      const a = toD(H(i / 3, 0)), b = toD(H(i / 3, 1)), c = toD(H(0, i / 3)), d = toD(H(1, i / 3));
+      vctx.beginPath(); vctx.moveTo(...a); vctx.lineTo(...b); vctx.stroke();
+      vctx.beginPath(); vctx.moveTo(...c); vctx.lineTo(...d); vctx.stroke();
+    }
+    if (live.length) live.forEach((c, i) => {
+      const [x, y] = toD(H((i % 3 + 0.5) / 3, (Math.floor(i / 3) + 0.5) / 3)), q = 16 * u;
+      vctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; vctx.fillRect(x - q / 2, y - q / 2, q, q);
+      vctx.strokeStyle = "#fff"; vctx.lineWidth = 2 * u; vctx.strokeRect(x - q / 2, y - q / 2, q, q);
+    });
+    quad.forEach(([x, y]) => {
+      vctx.beginPath(); vctx.arc(x, y, 11 * u, 0, Math.PI * 2);
+      vctx.fillStyle = "rgba(255,255,255,0.95)"; vctx.fill();
+      vctx.lineWidth = 3 * u; vctx.strokeStyle = "#1d4ed8"; vctx.stroke();
+    });
+    requestAnimationFrame(render);
+  }
+
+  // Capture freezes the frame and shows the detected colours for checking before anything is saved.
+  let review = null;
+  const reviewEl = document.getElementById("review"), reviewBar = document.getElementById("reviewBar"), mainControls = document.getElementById("mainControls");
+  captureBtn.addEventListener("click", () => {
+    if (review || !drawSource()) return;
+    const sample = sampleWork(), ranks = sample.lab.map(rankColors);
+    review = { face: currentFace, sample, ranks, labels: ranks.map(r => r[0]), fx: !!(video && mirror), fy: !!(video && mirrorV) };
+    reviewBar.hidden = false; mainControls.hidden = true;
+    updateReviewWarn();
+    badge.textContent = "Prüfen · " + FACE_DE[currentFace];
+    renderReview();
+  });
+  function renderReview() {
+    reviewEl.innerHTML = ""; reviewEl.hidden = !review;
+    if (!review) return;
+    const H = quadMap(corners), toD = ([x, y]) => [review.fx ? 1 - x : x, review.fy ? 1 - y : y];
+    for (let k = 0; k < 9; k++) {
+      const r = Math.floor(k / 3), cc = k % 3, c = review.labels[k];
+      const b = document.createElement("button"); b.type = "button";
+      const [cx, cy] = toD(H((cc + 0.5) / 3, (r + 0.5) / 3));
+      const w = Math.hypot(...[0, 1].map(j => H((cc + 1) / 3, (r + 0.5) / 3)[j] - H(cc / 3, (r + 0.5) / 3)[j]));
+      const h = Math.hypot(...[0, 1].map(j => H((cc + 0.5) / 3, (r + 1) / 3)[j] - H((cc + 0.5) / 3, r / 3)[j]));
+      const size = Math.min(w, h) * 96;
+      Object.assign(b.style, { left: cx * 100 + "%", top: cy * 100 + "%", width: size + "%", height: size + "%" });
+      if (c !== review.ranks[k][0]) b.className = "changed";
+      const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = CANON[c].hex;
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = CANON[c].name;
+      b.setAttribute("aria-label", `Feld ${k + 1}: ${CANON[c].name}. Anklicken für die nächste Farbe`);
+      b.append(sw, nm);
+      b.addEventListener("click", () => {
+        const rk = review.ranks[k];
+        review.labels[k] = rk[(rk.indexOf(review.labels[k]) + 1) % 6];
+        renderReview(); updateReviewWarn();
+      });
+      reviewEl.appendChild(b);
+    }
+  }
+  function updateReviewWarn() {
+    const w = document.getElementById("reviewWarn");
+    if (!review) { w.hidden = true; return; }
+    const dup = SCAN_ORDER.find(f => f !== review.face && scans[f] && scans[f].labels[4] === review.labels[4]);
+    w.hidden = !dup;
+    if (dup) w.textContent = `Achtung: Eine Seite mit der Mitte ${CANON[review.labels[4]].name} hast du schon gescannt (${SCAN_ORDER.indexOf(dup) + 1}. ${FACE_DE[dup]}). Liegt die richtige Seite vor der Kamera?`;
+  }
+  function endReview() { review = null; renderReview(); reviewBar.hidden = true; mainControls.hidden = false; if (video) updateBadge(); }
+  document.getElementById("retake").addEventListener("click", () => { endReview(); if (photo) badge.textContent = "Foto · " + FACE_DE[currentFace]; });
+  document.getElementById("accept").addEventListener("click", () => {
+    if (!review) return;
+    const fc = review.face;
+    scans[fc] = { rgb: toStandard(fc, review.sample.rgb), lab: toStandard(fc, review.sample.lab), labels: toStandard(fc, review.labels) };
+    learnFace(review.sample, review.labels); renderCalib();
+    endReview();
+    const next = SCAN_ORDER.find(f => !scans[f]);
+    if (next) currentFace = next;
+    if (photo && next) { photo = null; showZoom(false); captureBtn.disabled = true; badge.textContent = "Nächstes Foto aufnehmen"; }
+    if (SCAN_ORDER.every(f => scans[f])) {
+      assembleFromScans();
+      if (!next) { photo = null; stopCamera(); showZoom(false); captureBtn.disabled = true; badge.textContent = "Alle Seiten gescannt"; }
+      document.getElementById("h-net").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    renderScanUI();
+  });
+  // Space bar captures and confirms, so the cube can be turned with both hands without the mouse.
+  document.addEventListener("keydown", e => {
+    if (review) {
+      if (e.key === " " && !e.repeat) { e.preventDefault(); document.getElementById("accept").click(); }
+      else if (e.key === "Escape") { e.preventDefault(); document.getElementById("retake").click(); }
+      return;
+    }
+    if (e.key !== " " || e.repeat || captureBtn.disabled) return;
+    if (e.target.closest("button, input, select, textarea, label")) return;
+    e.preventDefault(); captureBtn.click();
+  });
+  function renderCalib() {
+    const pal = document.getElementById("calibPal"); pal.innerHTML = "";
+    CANON.forEach((c, i) => {
+      const b = document.createElement("button"); b.type = "button";
+      const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = c.hex;
+      b.append(sw, document.createTextNode(`${c.name} · ${examples[i].length}`));
+      b.setAttribute("aria-label", `${c.name} einlernen, bisher ${examples[i].length} Beispiele`);
+      b.addEventListener("click", () => {
+        const msg = document.getElementById("calibMsg");
+        if (review || !drawSource()) { msg.textContent = "Starte zuerst die Kamera oder nimm ein Foto auf."; return; }
+        const lab = sampleWork().lab[4].map(v => Math.round(v * 10) / 10);
+        examples[i].push(lab); if (examples[i].length > MAX_EXAMPLES) examples[i].shift();
+        saveRefs(); renderCalib();
+        const n = examples[i].length;
+        msg.textContent = `${c.name} gespeichert. Die App kennt jetzt ${n} ${n === 1 ? "Beispiel" : "Beispiele"} dafür.`;
+      });
+      pal.appendChild(b);
+    });
+  }
+  document.getElementById("resetColors").addEventListener("click", e => {
+    examples = [[], [], [], [], [], []]; saveRefs(); renderCalib();
+    e.target.textContent = "Zurückgesetzt";
+  });
+  document.getElementById("resetScan").addEventListener("click", () => {
+    if (review) endReview();
+    scans = {}; currentFace = SCAN_ORDER[0]; renderScanUI();
+    if (photo) badge.textContent = "Foto · " + FACE_DE[currentFace];
+  });
+
+  function renderScanUI() {
+    const idx = SCAN_ORDER.indexOf(currentFace);
+    document.getElementById("instrEyebrow").textContent = `Seite ${idx + 1} von 6`;
+    document.getElementById("instrTitle").textContent = FACE_DE[currentFace];
+    document.getElementById("instrText").textContent = instrFor(currentFace);
+    renderGuide();
+    const list = document.getElementById("faceList"); list.innerHTML = "";
+    SCAN_ORDER.forEach((f, i) => {
+      const li = document.createElement("li"), b = document.createElement("button");
+      b.type = "button"; if (f === currentFace) b.setAttribute("aria-current", "step");
+      const mini = document.createElement("span"); mini.className = "mini";
+      for (let k = 0; k < 9; k++) { const t = document.createElement("i"); if (scans[f]) t.style.background = CANON[scans[f].labels[k]].hex; mini.appendChild(t); }
+      const l = document.createElement("span"); l.className = "lbl"; l.textContent = `${i + 1}. ${FACE_DE[f]}${scans[f] ? " ✓" : ""}`;
+      b.append(mini, l);
+      b.addEventListener("click", () => { if (review) endReview(); currentFace = f; renderScanUI(); if (photo) badge.textContent = "Foto · " + FACE_DE[f]; });
+      li.appendChild(b); list.appendChild(li);
+    });
+  }
+
+  let assemblyNote = "";
+  function assembleFromScans() {
+    const grids = SCAN_ORDER.map(f => scans[f].labels);
+    const all = grids.flat(), counts = [0, 0, 0, 0, 0, 0]; all.forEach(c => counts[c]++);
+    const centers = grids.map(g => g[4]);
+    let res = null;
+    if (counts.every(n => n === 9) && new Set(centers).size === 6) res = assemble(grids);
+    if (res) {
+      facelets = res.lab;
+      assemblyNote = (res.moved || res.turned)
+        ? "Einige Seiten waren verdreht oder in anderer Reihenfolge gescannt. Die App hat sie selbst richtig zusammengesetzt."
+        : "";
+    } else {
+      facelets = []; FACES.forEach(f => scans[f].labels.forEach(c => facelets.push(c)));
+      assemblyNote = new Set(centers).size < 6
+        ? "Zwei Aufnahmen haben dieselbe Mittelfarbe. Wahrscheinlich hast du eine Seite doppelt gescannt und eine ausgelassen. Klicke oben die doppelte Seite an und scanne die fehlende."
+        : "Die Seiten passen in keiner Anordnung zusammen. Wahrscheinlich ist eine Farbe falsch erkannt. Vergleiche das Netz mit deinem Würfel und korrigiere die Felder.";
+    }
+    source = "scan"; clearSolution(); renderNet();
+  }
+
+  // ---------- Net editor ----------
+  const netEl = document.getElementById("net"), statusEl = document.getElementById("status"), solveBtn = document.getElementById("solveBtn");
+  let lastCheck = { ok: false };
+  function renderPalette() {
+    const pal = document.getElementById("palette"); pal.innerHTML = "";
+    FACES.forEach((_, c) => {
+      const b = document.createElement("button"); b.type = "button";
+      b.setAttribute("aria-pressed", String(paint === c));
+      const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = colorOf(c).hex;
+      b.append(sw, document.createTextNode(colorOf(c).name));
+      b.addEventListener("click", () => { paint = c; renderPalette(); });
+      pal.appendChild(b);
+    });
+  }
+  function renderNet() {
+    lastCheck = validate(facelets);
+    netEl.innerHTML = "";
+    FACES.forEach((f, fi) => {
+      const wrap = document.createElement("div"); wrap.className = "netface"; wrap.dataset.f = f;
+      const cap = document.createElement("span"); cap.className = "cap"; cap.textContent = SHORT_DE[f];
+      const face = document.createElement("div"); face.className = "face";
+      for (let k = 0; k < 9; k++) {
+        const i = fi * 9 + k, b = document.createElement("button");
+        b.type = "button"; b.className = "sticker" + (k === 4 ? " center" : "") + (lastCheck.bad.has(i) ? " bad" : "");
+        b.style.background = colorOf(facelets[i]).hex;
+        b.setAttribute("aria-label", `${FACE_DE[f]}, Feld ${k + 1}: ${colorOf(facelets[i]).name}`);
+        b.addEventListener("click", () => { facelets[i] = paint; assemblyNote = ""; clearSolution(); renderNet(); });
+        face.appendChild(b);
+      }
+      wrap.append(cap, face); netEl.appendChild(wrap);
+    });
+    document.getElementById("sourceTag").textContent = source === "example" ? "Beispielwürfel" : "Dein Scan";
+    statusEl.innerHTML = "";
+    if (lastCheck.ok) {
+      statusEl.dataset.kind = "ok";
+      statusEl.textContent = isSolved(facelets) ? "Dieser Würfel ist bereits gelöst." : "Der Würfel ist gültig und kann gelöst werden.";
+      if (assemblyNote && source === "scan") { const n = document.createElement("span"); n.className = "note"; n.textContent = assemblyNote; statusEl.appendChild(n); }
+    } else {
+      statusEl.dataset.kind = "err";
+      const p = document.createElement("strong"); p.textContent = "Das passt noch nicht:";
+      const ul = document.createElement("ul"); lastCheck.errors.forEach(t => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+      statusEl.append(p, ul);
+      if (assemblyNote && source === "scan") { const n = document.createElement("span"); n.className = "note"; n.textContent = assemblyNote; statusEl.appendChild(n); }
+    }
+    renderPalette(); refreshSolveBtn(); renderHold();
+    if (!solution) paintCube(facelets, null);
+  }
+  function refreshSolveBtn() {
+    solveBtn.disabled = !(lastCheck.ok && solver.ready && !isSolved(facelets));
+    solveBtn.textContent = solver.ready ? "Lösung berechnen" : "Löser wird vorbereitet …";
+  }
+  function renderHold() {
+    const front = colorOf(facelets[22]).name, top = colorOf(facelets[4]).name;
+    document.getElementById("holdHint").innerHTML = "";
+    const t = document.createElement("span");
+    t.innerHTML = `So hältst du den Würfel während der ganzen Lösung: <b></b> Mitte zeigt zu dir, <b></b> Mitte zeigt nach oben. Nicht umgreifen, nur die angegebene Seite drehen.`;
+    t.querySelectorAll("b")[0].textContent = front; t.querySelectorAll("b")[1].textContent = top;
+    document.getElementById("holdHint").appendChild(t);
+  }
+
+  solveBtn.addEventListener("click", async () => {
+    if (!lastCheck.ok || !solver.ready) return;
+    solveBtn.disabled = true; solveBtn.textContent = "Rechne …";
+    const str = toString(facelets);
+    try {
+      const sol = (await solveString(str)).trim();
+      const moves = sol ? sol.split(/\s+/) : [];
+      const states = [facelets.slice()];
+      const c = Cube.fromString(str), cc = centersOf(facelets);
+      moves.forEach(mv => { c.move(mv); states.push(labelsFromString(c.asString(), cc)); });
+      solution = { moves, states }; step = 0;
+      renderSolution();
+      document.getElementById("h-solve").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      statusEl.dataset.kind = "err";
+      statusEl.textContent = "Die Lösung konnte nicht berechnet werden. Prüfe den Scan und versuche es noch einmal.";
+    }
+    refreshSolveBtn();
+  });
+
+  // ---------- Solution player ----------
+  const DIR = {
+    U: ["nach links", "nach rechts"], D: ["nach rechts", "nach links"],
+    R: ["nach oben", "nach unten"], L: ["nach unten", "nach oben"],
+    F: ["im Uhrzeigersinn", "gegen den Uhrzeigersinn"],
+    B: ["von vorne gesehen gegen den Uhrzeigersinn", "von vorne gesehen im Uhrzeigersinn"],
+  };
+  const LAYER = { U: "Obere Ebene", D: "Untere Ebene", R: "Rechte Seite", L: "Linke Seite", F: "Vorderseite", B: "Rückseite" };
+  // Short German label per move, seen from the front: arrows show where the turning layer moves.
+  const SHORT_MOVE = {
+    R: ["Rechts ↑", "Rechts ↓"], L: ["Links ↓", "Links ↑"], U: ["Oben ←", "Oben →"], D: ["Unten →", "Unten ←"],
+    F: ["Vorne ↻", "Vorne ↺"], B: ["Hinten ↺", "Hinten ↻"],
+  };
+  function shortMove(mv) { const f = mv[0], mod = mv.slice(1); return mod === "2" ? `${SHORT_DE[f]} 2×` : SHORT_MOVE[f][mod === "'" ? 1 : 0]; }
+  function describe(mv) {
+    const f = mv[0], mod = mv.slice(1);
+    if (mod === "2") return `${LAYER[f]} eine halbe Drehung (180°) drehen. Die Richtung ist egal.`;
+    return `${LAYER[f]} eine Vierteldrehung ${DIR[f][mod === "'" ? 1 : 0]} drehen.`;
+  }
+  function clearSolution() { solution = null; step = 0; renderSolution(); }
+  function renderSolution() {
+    const big = document.getElementById("moveBig"), desc = document.getElementById("moveDesc");
+    const counter = document.getElementById("moveCounter"), list = document.getElementById("moves");
+    const prev = document.getElementById("prev"), next = document.getElementById("next");
+    list.innerHTML = "";
+    if (!solution) {
+      big.textContent = "–"; counter.textContent = "Noch keine Lösung"; document.getElementById("moveNotation").textContent = "";
+      desc.textContent = "Scanne deinen Würfel oder probiere es mit dem Beispielwürfel: Klicke auf „Lösung berechnen“.";
+      document.getElementById("solveCount").textContent = "";
+      prev.disabled = next.disabled = true; paintCube(facelets, null); return;
+    }
+    const n = solution.moves.length;
+    document.getElementById("solveCount").textContent = `${n} Züge`;
+    solution.moves.forEach((mv, i) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = shortMove(mv); b.dataset.mv = mv;
+      if (i < step) b.className = "done";
+      if (i === step) b.setAttribute("aria-current", "step");
+      b.addEventListener("click", () => { step = i; renderSolution(); });
+      list.appendChild(b);
+    });
+    if (step >= n) {
+      big.textContent = "✓"; counter.textContent = n ? `Alle ${n} Züge erledigt` : ""; document.getElementById("moveNotation").textContent = "";
+      desc.textContent = n ? "Fertig. Dein Würfel ist gelöst." : "Dieser Würfel ist bereits gelöst.";
+      paintCube(solution.states[n], null);
+    } else {
+      const mv = solution.moves[step];
+      big.textContent = shortMove(mv); counter.textContent = `Zug ${step + 1} von ${n}`;
+      document.getElementById("moveNotation").textContent = `Fachschreibweise: ${mv}`;
+      desc.textContent = describe(mv);
+      paintCube(solution.states[step], mv);
+    }
+    prev.disabled = step === 0; next.disabled = step >= n;
+    next.textContent = step === n - 1 ? "Letzter Zug erledigt" : "Weiter";
+  }
+  document.getElementById("prev").addEventListener("click", () => { if (solution && step > 0) { step--; renderSolution(); } });
+  document.getElementById("next").addEventListener("click", () => { if (solution && step < solution.moves.length) { step++; renderSolution(); } });
+  document.addEventListener("keydown", e => {
+    if (!solution || e.target.closest("input")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); document.getElementById("next").click(); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); document.getElementById("prev").click(); }
+  });
+
+  // ---------- 3D cube ----------
+  const cube3d = document.getElementById("cube3d"), stage = document.getElementById("stage");
+  const VIEWS = { F: [-24, -38], R: [-24, -38], U: [-24, -38], L: [-24, 38], B: [-24, 142], D: [24, -38] };
+  let rot = VIEWS.F.slice(), faceEls = {};
+  function arrowSvg() {
+    return `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><marker id="ah-ID" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ffffff"/></marker></defs>
+      <path class="arc" d="" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" style="filter:drop-shadow(0 0 3px rgba(0,0,0,.8))"/></svg>`;
+  }
+  function buildCube() {
+    FACES.forEach(f => {
+      const el = document.createElement("div"); el.className = "f3"; el.dataset.f = f;
+      for (let k = 0; k < 9; k++) el.appendChild(document.createElement("i"));
+      el.insertAdjacentHTML("beforeend", arrowSvg().replace(/ID/g, f));
+      cube3d.appendChild(el); faceEls[f] = el;
+    });
+    applyRot();
+  }
+  function applyRot() { cube3d.style.transform = `rotateX(${rot[0]}deg) rotateY(${rot[1]}deg)`; }
+  function paintCube(fl, mv) {
+    FACES.forEach((f, fi) => {
+      const el = faceEls[f]; if (!el) return;
+      el.querySelectorAll("i").forEach((t, k) => { t.style.background = colorOf(fl[fi * 9 + k]).hex; });
+      el.classList.toggle("turn", !!mv && mv[0] === f);
+    });
+    if (mv) {
+      const f = mv[0], mod = mv.slice(1), el = faceEls[f], arc = el.querySelector(".arc");
+      // Arc around the face centre; clockwise as seen from outside that face.
+      const cw = mod !== "'", r = 30, a0 = -150, sweep = mod === "2" ? 300 : 240;
+      const p = deg => [50 + r * Math.cos(deg * Math.PI / 180), 50 + r * Math.sin(deg * Math.PI / 180)];
+      const s = cw ? p(a0) : p(a0 + sweep), e = cw ? p(a0 + sweep) : p(a0);
+      arc.setAttribute("d", `M${s[0].toFixed(1)},${s[1].toFixed(1)} A${r},${r} 0 1 ${cw ? 1 : 0} ${e[0].toFixed(1)},${e[1].toFixed(1)}`);
+      arc.setAttribute("marker-end", `url(#ah-${f})`);
+      if (mod === "2") arc.setAttribute("marker-start", `url(#ah-${f})`); else arc.removeAttribute("marker-start");
+      rot = VIEWS[f].slice(); applyRot();
+    }
+  }
+  let rdrag = null;
+  stage.addEventListener("pointerdown", e => { rdrag = { x: e.clientX, y: e.clientY }; stage.setPointerCapture(e.pointerId); cube3d.classList.add("dragging"); });
+  stage.addEventListener("pointermove", e => {
+    if (!rdrag) return;
+    rot[1] += (e.clientX - rdrag.x) * 0.5; rot[0] = Math.max(-80, Math.min(80, rot[0] - (e.clientY - rdrag.y) * 0.5));
+    rdrag = { x: e.clientX, y: e.clientY }; applyRot();
+  });
+  const endDrag = () => { rdrag = null; cube3d.classList.remove("dragging"); };
+  stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+  function sizeCube() { const w = stage.getBoundingClientRect().width; cube3d.style.setProperty("--c", Math.round(w * 0.44) + "px"); }
+  window.addEventListener("resize", sizeCube);
+
+  // ---------- Boot ----------
+  buildCube(); sizeCube(); buildGuide(); renderCalib();
+  if (window.Cube) {
+    const c = new Cube(); c.move("R U2 F' L D2 B R' U F2 D' L2 B2 U R2 F D L'");
+    facelets = labelsFromString(c.asString(), [0, 1, 2, 3, 4, 5]);
+    startSolver();
+  } else {
+    setChip("error", "Löser nicht erreichbar. Internetverbindung prüfen.");
+  }
+  renderScanUI(); renderNet(); renderSolution();
+  requestAnimationFrame(render);
+})();
+</script>
+
+</body>
+</html>
