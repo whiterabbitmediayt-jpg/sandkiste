@@ -16,7 +16,7 @@ Web-App, die einen Zauberwürfel (3×3) per Kamera einliest und die Lösung Zug 
 Lokal (Live-Kamera funktioniert auf `localhost`):
 
 ```bash
-cd rubiks-scanner && python3 -m http.server 8000
+cd rubiks-scanner && python3 -m http.server 8000 --bind 127.0.0.1
 ```
 
 Dann <http://localhost:8000> öffnen. Für das Handy die Seite über HTTPS ausliefern, z. B. mit GitHub Pages. Ohne HTTPS erlauben Browser keinen Kamerazugriff.
