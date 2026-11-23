@@ -100,7 +100,9 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .zoom { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
 .zoom input { flex: 1; accent-color: var(--accent); }
 #zoomVal { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
-p.zoom { margin-top: 4px; }
+p.zoom { margin-top: 4px; display: block; }
+#orientRow { flex-wrap: wrap; }
+#orientRow button { white-space: nowrap; }
 .zoom button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
 #mirrorBtn[aria-pressed="true"], #mirrorVBtn[aria-pressed="true"] { border-color: var(--accent); }
 .imgfix { margin-top: 12px; display: grid; gap: 8px; }
@@ -114,7 +116,29 @@ p.zoom { margin-top: 4px; }
 .ctl-check input { accent-color: var(--accent); width: 16px; height: 16px; }
 .zoom select { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 
-.instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; gap: 8px; }
+.instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.instr-text { display: grid; gap: 8px; min-width: 0; }
+.turn-guide { width: 120px; height: 120px; perspective: 600px; }
+@media (max-width: 420px) { .turn-guide { width: 92px; height: 92px; } .tg-cube { --c: 44px !important; } }
+.tg-flip, .tg-view { width: 100%; height: 100%; display: grid; place-items: center; transform-style: preserve-3d; }
+.tg-view { transform: rotateX(-20deg) rotateY(-28deg); }
+.tg-cube { --c: 56px; width: var(--c); height: var(--c); position: relative; transform-style: preserve-3d; }
+.tg-f { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; background: var(--plastic); border-radius: 5px; backface-visibility: hidden; }
+.tg-f i { border-radius: 2px; background: #6b717c; }
+.tg-f.target { box-shadow: 0 0 0 3px var(--accent); }
+.tg-f.target.unknown i { background: #e7ebf3; }
+.tg-f[data-f="F"] { transform: translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="B"] { transform: rotateY(180deg) translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="R"] { transform: rotateY(90deg) translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="L"] { transform: rotateY(-90deg) translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="U"] { transform: rotateX(90deg) translateZ(calc(var(--c) / 2)); }
+.tg-f[data-f="D"] { transform: rotateX(-90deg) translateZ(calc(var(--c) / 2)); }
+.calib { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 10px; }
+.calib summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.calib[open] { gap: 10px; }
+.calib p { font-size: 13px; color: var(--muted); margin-top: 8px; }
+.calib .palette { margin-top: 10px; }
+.calib-msg:empty { display: none; }
 .instr .eyebrow { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 .instr h3 { font-size: 20px; }
 .notice { font-size: 13px; color: var(--warn); }
@@ -256,13 +280,22 @@ p.zoom { margin-top: 4px; }
         <p class="zoom" id="camSetNote" hidden>Fokus, Belichtung und Farben der Kamera lassen sich in diesem Browser nicht einstellen. In Chrome oder Chromium erscheinen die Regler hier.</p>
       </div>
       <div class="side">
-        <div class="instr" aria-live="polite">
-          <span class="eyebrow" id="instrEyebrow">Seite 1 von 6</span>
-          <h3 id="instrTitle">Vorderseite</h3>
-          <p id="instrText"></p>
-          <p class="notice" id="camNotice" hidden></p>
+        <div class="instr">
+          <div class="instr-text" aria-live="polite">
+            <span class="eyebrow" id="instrEyebrow">Seite 1 von 6</span>
+            <h3 id="instrTitle">Oberseite</h3>
+            <p id="instrText"></p>
+            <p class="notice" id="camNotice" hidden></p>
+          </div>
+          <div class="turn-guide" aria-hidden="true"><div class="tg-flip" id="tgFlip"><div class="tg-view"><div class="tg-cube" id="tgCube"></div></div></div></div>
         </div>
         <ul class="faces" id="faceList"></ul>
+        <details class="calib" id="calib">
+          <summary>Farben einlernen</summary>
+          <p>Halte ein Feld einer Farbe in das mittlere Kästchen des Rasters und klicke unten die passende Farbe an. Am besten nimmst du dafür die sechs Mittelfelder. Danach erkennt die App deine Farben von Anfang an zuverlässiger.</p>
+          <div class="palette" id="calibPal"></div>
+          <p class="calib-msg" id="calibMsg" aria-live="polite"></p>
+        </details>
         <ul class="tips">
           <li>Gleichmäßiges Tageslicht, keine Spiegelungen auf den Stickern.</li>
           <li>Den Würfel so halten oder hinstellen, dass er das Raster genau ausfüllt. Mit Zoom und Verschieben passt du den Ausschnitt an.</li>
@@ -328,7 +361,8 @@ p.zoom { margin-top: 4px; }
   // ---------- Cube model ----------
   // Facelet order follows Kociemba: U R F D L B, each face read row by row as seen from outside.
   const FACES = ["U", "R", "F", "D", "L", "B"];
-  const SCAN_ORDER = ["F", "R", "B", "L", "U", "D"];
+  // Scan order with a single quarter move between faces: Oben, Vorne, Rechts, Unten, Hinten, Links.
+  const SCAN_ORDER = ["U", "F", "R", "D", "B", "L"];
   const SHORT_DE = { U: "Oben", R: "Rechts", F: "Vorne", D: "Unten", L: "Links", B: "Hinten" };
   const FACE_DE = { U: "Oberseite", R: "Rechte Seite", F: "Vorderseite", D: "Unterseite", L: "Linke Seite", B: "Rückseite" };
   const CANON = [
@@ -348,26 +382,95 @@ p.zoom { margin-top: 4px; }
   const EF = [[5,10],[7,19],[3,37],[1,46],[32,16],[28,25],[30,43],[34,52],[23,12],[21,41],[50,39],[48,14]];
   const EC = [[0,1],[0,2],[0,4],[0,5],[3,1],[3,2],[3,4],[3,5],[2,1],[2,4],[5,4],[5,1]];
 
-  // Directions refer to the preview. In a mirrored preview the cube's right side shows on the left.
-  // A vertically mirrored preview swaps "oben" and "unten" in the same way.
-  function instrFor(f) {
+  // ---------- Cube orientation during the scan ----------
+  // World axes as the camera image (after the rotation setting, before mirroring): x right, y up, z toward the camera.
+  const NORMAL = { U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], R: [1, 0, 0], L: [-1, 0, 0] };
+  // Standard sticker order of each face (Kociemba): which neighbour is at the top and at the right.
+  const STD_TOP = { U: "B", F: "U", R: "U", D: "F", B: "U", L: "U" };
+  const mul = (A, B) => A.map(r => [0, 1, 2].map(j => r[0] * B[0][j] + r[1] * B[1][j] + r[2] * B[2][j]));
+  const apply = (M, v) => M.map(r => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]);
+  const ID = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  const TILT = [[1, 0, 0], [0, 0, 1], [0, -1, 0]];   // the side at the bottom of the image comes to the camera
+  const TURN = [[0, 0, -1], [0, 1, 0], [1, 0, 0]];   // the side at the right of the image comes to the camera
+  const STEP_MOVE = { U: null, F: TILT, R: TURN, D: TILT, B: TURN, L: TILT };
+  const ORIENT = {};
+  (() => { let M = [[1, 0, 0], [0, 0, -1], [0, 1, 0]]; SCAN_ORDER.forEach(f => { if (STEP_MOVE[f]) M = mul(STEP_MOVE[f], M); ORIENT[f] = M; }); })();
+  function faceAt(M, dir) { return Object.keys(NORMAL).find(f => apply(M, NORMAL[f]).every((v, i) => v === dir[i])); }
+  const rotCW = a => [6, 3, 0, 7, 4, 1, 8, 5, 2].map(i => a[i]);
+  // Quarter turns (clockwise) that bring a face, as captured in its scan position, into standard order.
+  // Turning the captured image clockwise k times moves what was on the left to the top.
+  function stdTurns(f) {
+    const dirs = [[0, 1, 0], [-1, 0, 0], [0, -1, 0], [1, 0, 0]];   // top, left, bottom, right in the image
+    for (let k = 0; k < 4; k++) if (faceAt(ORIENT[f], dirs[k]) === STD_TOP[f]) return k;
+    return 0;
+  }
+  function toStandard(f, arr) { let a = arr.slice(); for (let i = 0; i < stdTurns(f); i++) a = rotCW(a); return a; }
+
+  // Directions refer to the preview, so mirroring swaps left/right or top/bottom in the words.
+  function dispDir(d) {
     const fx = !!(video && mirror), fy = !!(video && mirrorV);
-    const side = fx ? "links" : "rechts", top = fy ? "unten" : "oben", bottom = fy ? "oben" : "unten";
-    const note = fx ? " Das Bild ist horizontal gespiegelt, deshalb links." : "";
-    return {
-      F: `Richte eine Seite gerade zur Kamera. Das ist ab jetzt die Vorderseite. Die Seite, die im Bild ${top} liegt, ist die Oberseite. So liegt der Würfel später auch beim Lösen.`,
-      R: `Drehe den Würfel, bis die Seite, die im Bild ${side} lag, zur Kamera zeigt. Die Oberseite bleibt dabei im Bild ${top}.${note}`,
-      B: `Weiter in dieselbe Richtung drehen, bis die Rückseite zur Kamera zeigt. Die Oberseite bleibt im Bild ${top}.`,
-      L: `Noch einmal in dieselbe Richtung drehen. Jetzt zeigt die vierte Seite zur Kamera. Die Oberseite bleibt im Bild ${top}.`,
-      U: `Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Oberseite zur Kamera zeigt. Die Vorderseite liegt danach im Bild ${bottom}.`,
-      D: `Zurück zur Vorderseite. Kippe den Würfel so, dass die Unterseite zur Kamera zeigt. Die Vorderseite liegt danach im Bild ${top}.`,
-    }[f];
+    if (fx && (d === "links" || d === "rechts")) return d === "links" ? "rechts" : "links";
+    if (fy && (d === "oben" || d === "unten")) return d === "oben" ? "unten" : "oben";
+    return d;
+  }
+  // Is the viewer following the planned sequence for this face (previous face just scanned)?
+  function inSequence(f) {
+    const i = SCAN_ORDER.indexOf(f);
+    return !scans[f] && (i === 0 ? SCAN_ORDER.every(g => !scans[g]) : !!scans[SCAN_ORDER[i - 1]] && SCAN_ORDER.slice(i).every(g => !scans[g]));
+  }
+  function centerName(f) { return scans[f] ? CANON[scans[f].labels[4]].name : null; }
+  function instrFor(f) {
+    if (inSequence(f)) {
+      if (f === SCAN_ORDER[0]) return `Halte eine beliebige Seite gerade zur Kamera. Das ist ab jetzt die Oberseite. Die Seite, die dabei im Bild ${dispDir("unten")} liegt, wird die Vorderseite.`;
+      const dir = STEP_MOVE[f] === TILT ? "unten" : "rechts";
+      return `Dreh den Würfel eine Vierteldrehung, sodass die Seite, die im Bild ${dispDir(dir)} liegt, zur Kamera zeigt. Der kleine Würfel zeigt die Bewegung.`;
+    }
+    const top = faceAt(ORIENT[f], [0, 1, 0]), me = centerName(f), topName = centerName(top);
+    if (me && topName) return `Neu scannen: Halte die Seite mit der Mitte ${me} zur Kamera, sodass die Seite mit der Mitte ${topName} im Bild ${dispDir("oben")} liegt.`;
+    return "Scanne die Seiten am besten der Reihe nach. Diese Seite ist dran, sobald die Seite davor gescannt ist.";
+  }
+
+  // ---------- Turn guide: small 3D cube showing the move to the next face ----------
+  const tgCube = document.getElementById("tgCube"), tgFlip = document.getElementById("tgFlip");
+  let tgAnim = null;
+  // World (y up) to CSS (y down) and into a matrix3d string (column-major).
+  function cssMatrix(M) {
+    const sg = [1, -1, 1], c = (i, j) => sg[i] * M[i][j] * sg[j];
+    return `matrix3d(${c(0, 0)},${c(1, 0)},${c(2, 0)},0,${c(0, 1)},${c(1, 1)},${c(2, 1)},0,${c(0, 2)},${c(1, 2)},${c(2, 2)},0,0,0,0,1)`;
+  }
+  function buildGuide() {
+    FACES.forEach(f => {
+      const el = document.createElement("div"); el.className = "tg-f"; el.dataset.f = f;
+      for (let k = 0; k < 9; k++) el.appendChild(document.createElement("i"));
+      tgCube.appendChild(el);
+    });
+  }
+  function renderGuide() {
+    tgFlip.style.transform = `scale(${(video && mirror) ? -1 : 1}, ${(video && mirrorV) ? -1 : 1})`;
+    tgCube.querySelectorAll(".tg-f").forEach(el => {
+      const f = el.dataset.f, col = scans[f] ? CANON[scans[f].labels[4]].hex : null;
+      el.classList.toggle("target", f === currentFace);
+      el.classList.toggle("unknown", !col);
+      el.querySelectorAll("i").forEach(i => { i.style.background = col || ""; });
+    });
+    if (tgAnim) { tgAnim.cancel(); tgAnim = null; }
+    const end = cssMatrix(ORIENT[currentFace]);
+    const prev = SCAN_ORDER[SCAN_ORDER.indexOf(currentFace) - 1];
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tgCube.style.transform = end;
+    if (inSequence(currentFace) && prev && !reduce && tgCube.animate) {
+      const start = cssMatrix(ORIENT[prev]);
+      tgAnim = tgCube.animate([
+        { transform: start, offset: 0 }, { transform: start, offset: 0.25 },
+        { transform: end, offset: 0.75 }, { transform: end, offset: 1 },
+      ], { duration: 2600, iterations: Infinity, easing: "ease-in-out" });
+    }
   }
 
   let facelets = solvedFacelets();   // 54 colour labels (index into CANON), confirmed by the viewer
   let source = "example";            // "example" | "scan"
   let scans = {};                    // face -> { lab: [9], rgb: [9] }
-  let currentFace = "F";
+  let currentFace = SCAN_ORDER[0];
   let paint = 0;
   let solution = null;               // { moves: [], states: [] }
   let step = 0;
@@ -588,7 +691,7 @@ p.zoom { margin-top: 4px; }
     mirrorVBtn.setAttribute("aria-pressed", String(mirrorV));
     mirrorVBtn.textContent = `Vertikal spiegeln: ${mirrorV ? "an" : "aus"}`;
   }
-  rotBtn.addEventListener("click", () => { rotation = (rotation + 90) % 360; saveOrient(); updateOrientUI(); });
+  rotBtn.addEventListener("click", () => { rotation = (rotation + 90) % 360; saveOrient(); updateOrientUI(); renderScanUI(); });
   mirrorBtn.addEventListener("click", () => { mirror = !mirror; mirrorPref = mirror; saveOrient(); updateOrientUI(); updateBadge(); renderScanUI(); });
   mirrorVBtn.addEventListener("click", () => { mirrorV = !mirrorV; saveOrient(); updateOrientUI(); updateBadge(); renderScanUI(); });
   // Preview flips only. Maps between crop coordinates (what is sampled) and the preview; it is its own inverse.
@@ -908,8 +1011,9 @@ p.zoom { margin-top: 4px; }
   document.getElementById("retake").addEventListener("click", () => { endReview(); if (photo) badge.textContent = "Foto · " + FACE_DE[currentFace]; });
   document.getElementById("accept").addEventListener("click", () => {
     if (!review) return;
-    scans[review.face] = { rgb: review.sample.rgb, lab: review.sample.lab, labels: review.labels.slice() };
-    learnFace(review.sample, review.labels);
+    const fc = review.face;
+    scans[fc] = { rgb: toStandard(fc, review.sample.rgb), lab: toStandard(fc, review.sample.lab), labels: toStandard(fc, review.labels) };
+    learnFace(review.sample, review.labels); renderCalib();
     endReview();
     const next = SCAN_ORDER.find(f => !scans[f]);
     if (next) currentFace = next;
@@ -933,13 +1037,32 @@ p.zoom { margin-top: 4px; }
     if (e.target.closest("button, input, select, textarea, label")) return;
     e.preventDefault(); captureBtn.click();
   });
+  function renderCalib() {
+    const pal = document.getElementById("calibPal"); pal.innerHTML = "";
+    CANON.forEach((c, i) => {
+      const b = document.createElement("button"); b.type = "button";
+      const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = c.hex;
+      b.append(sw, document.createTextNode(`${c.name} · ${examples[i].length}`));
+      b.setAttribute("aria-label", `${c.name} einlernen, bisher ${examples[i].length} Beispiele`);
+      b.addEventListener("click", () => {
+        const msg = document.getElementById("calibMsg");
+        if (review || !drawSource()) { msg.textContent = "Starte zuerst die Kamera oder nimm ein Foto auf."; return; }
+        const lab = sampleWork().lab[4].map(v => Math.round(v * 10) / 10);
+        examples[i].push(lab); if (examples[i].length > MAX_EXAMPLES) examples[i].shift();
+        saveRefs(); renderCalib();
+        const n = examples[i].length;
+        msg.textContent = `${c.name} gespeichert. Die App kennt jetzt ${n} ${n === 1 ? "Beispiel" : "Beispiele"} dafür.`;
+      });
+      pal.appendChild(b);
+    });
+  }
   document.getElementById("resetColors").addEventListener("click", e => {
-    examples = [[], [], [], [], [], []]; saveRefs();
+    examples = [[], [], [], [], [], []]; saveRefs(); renderCalib();
     e.target.textContent = "Zurückgesetzt";
   });
   document.getElementById("resetScan").addEventListener("click", () => {
     if (review) endReview();
-    scans = {}; currentFace = "F"; renderScanUI();
+    scans = {}; currentFace = SCAN_ORDER[0]; renderScanUI();
     if (photo) badge.textContent = "Foto · " + FACE_DE[currentFace];
   });
 
@@ -948,6 +1071,7 @@ p.zoom { margin-top: 4px; }
     document.getElementById("instrEyebrow").textContent = `Seite ${idx + 1} von 6`;
     document.getElementById("instrTitle").textContent = FACE_DE[currentFace];
     document.getElementById("instrText").textContent = instrFor(currentFace);
+    renderGuide();
     const list = document.getElementById("faceList"); list.innerHTML = "";
     SCAN_ORDER.forEach((f, i) => {
       const li = document.createElement("li"), b = document.createElement("button");
@@ -1150,7 +1274,7 @@ p.zoom { margin-top: 4px; }
   window.addEventListener("resize", sizeCube);
 
   // ---------- Boot ----------
-  buildCube(); sizeCube();
+  buildCube(); sizeCube(); buildGuide(); renderCalib();
   if (window.Cube) {
     const c = new Cube(); c.move("R U2 F' L D2 B R' U F2 D' L2 B2 U R2 F D L'");
     facelets = labelsFromString(c.asString(), [0, 1, 2, 3, 4, 5]);
