@@ -91,6 +91,8 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .btn input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .zoom { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
 .zoom input { flex: 1; accent-color: var(--accent); }
+#zoomVal { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
+p.zoom { margin-top: 4px; }
 .zoom select { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 
 .instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; gap: 8px; }
@@ -194,9 +196,10 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
           <label for="camSelect">Kamera</label><select id="camSelect"></select>
         </div>
         <div class="zoom" id="zoomRow" hidden>
-          <label for="zoom">Zoom</label><input id="zoom" type="range" min="1" max="4" step="0.01" value="1">
-          <span>Ziehen zum Verschieben</span>
+          <label for="zoom">Zoom</label><input id="zoom" type="range" min="1" max="5" step="0.01" value="1">
+          <span id="zoomVal">1,0×</span>
         </div>
+        <p class="zoom" id="zoomHint" hidden>Mausrad zoomt, Bild ziehen verschiebt den Ausschnitt.</p>
       </div>
       <div class="side">
         <div class="instr" aria-live="polite">
@@ -208,7 +211,8 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
         <ul class="faces" id="faceList"></ul>
         <ul class="tips">
           <li>Gleichmäßiges Tageslicht, keine Spiegelungen auf den Stickern.</li>
-          <li>Den Würfel so halten, dass er das Raster genau ausfüllt.</li>
+          <li>Den Würfel so halten oder hinstellen, dass er das Raster genau ausfüllt. Mit Zoom und Verschieben passt du den Ausschnitt an.</li>
+          <li>Leertaste nimmt die Seite auf, so bleiben beide Hände am Würfel.</li>
           <li>Eine Seite falsch? Tippe sie oben an und scanne sie neu.</li>
         </ul>
       </div>
@@ -474,6 +478,18 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
   const captureBtn = document.getElementById("capture");
   const zoomRow = document.getElementById("zoomRow"), zoomEl = document.getElementById("zoom");
   let video = null, stream = null, photo = null, live = [], frame = 0, mirror = false;
+  // Visible crop of the source: zoom factor and pan offset in source pixels.
+  let crop = { zoom: 1, ox: 0, oy: 0 };
+  const zoomHint = document.getElementById("zoomHint"), zoomVal = document.getElementById("zoomVal");
+  const CROP_KEY = "wuerfel-scanner-webcam-crop";
+  function loadCamCrop() { try { const c = JSON.parse(localStorage.getItem(CROP_KEY)); if (c && c.zoom >= 1) return c; } catch (e) {} return { zoom: 1, ox: 0, oy: 0 }; }
+  function saveCamCrop() { if (!video) return; try { localStorage.setItem(CROP_KEY, JSON.stringify(crop)); } catch (e) {} }
+  function setZoom(z) {
+    crop.zoom = Math.max(1, Math.min(5, z));
+    zoomEl.value = crop.zoom; zoomVal.textContent = crop.zoom.toFixed(1).replace(".", ",") + "×";
+    saveCamCrop();
+  }
+  function showZoom(on) { zoomRow.hidden = !on; zoomHint.hidden = !on; }
   const camRow = document.getElementById("camRow"), camSelect = document.getElementById("camSelect");
   const GRID_MARGIN = 0.14;
 
@@ -482,7 +498,7 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
     try {
       if (stream) stream.getTracks().forEach(t => t.stop());
       const base = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } };
-      stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign(base, { width: { ideal: 1280 }, height: { ideal: 960 } }), audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign(base, { width: { ideal: 1920 }, height: { ideal: 1080 } }), audio: false });
       const track = stream.getVideoTracks()[0], settings = track.getSettings ? track.getSettings() : {};
       // Webcams facing the user are shown like a mirror; sampling always reads the unmirrored frame.
       mirror = settings.facingMode !== "environment";
@@ -490,7 +506,8 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
       video = document.createElement("video");
       video.playsInline = true; video.muted = true; video.srcObject = stream;
       await video.play();
-      photo = null; zoomRow.hidden = true; camNotice.hidden = true;
+      photo = null; camNotice.hidden = true;
+      crop = loadCamCrop(); setZoom(crop.zoom); showZoom(true);
       badge.textContent = mirror ? "Live · gespiegelt" : "Live";
       captureBtn.disabled = false;
       document.getElementById("startCam").textContent = "Kamera stoppen";
@@ -499,6 +516,7 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
   function stopCamera() {
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = null; video = null; camRow.hidden = true;
+    if (!photo) showZoom(false);
     document.getElementById("startCam").textContent = "Live-Kamera starten";
     if (!photo) { badge.textContent = "Keine Kamera"; captureBtn.disabled = true; }
   }
@@ -526,8 +544,8 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
     const img = new Image();
     img.onload = () => {
       stopCamera();
-      photo = { img, zoom: 1, ox: 0, oy: 0 };
-      zoomEl.value = 1; zoomRow.hidden = false;
+      photo = { img };
+      crop = { zoom: 1, ox: 0, oy: 0 }; setZoom(1); showZoom(true);
       badge.textContent = "Foto · " + FACE_DE[currentFace];
       captureBtn.disabled = false;
       URL.revokeObjectURL(img.src);
@@ -535,36 +553,39 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
     img.src = URL.createObjectURL(file);
     e.target.value = "";
   });
-  zoomEl.addEventListener("input", () => { if (photo) photo.zoom = +zoomEl.value; });
+  zoomEl.addEventListener("input", () => setZoom(+zoomEl.value));
+  view.addEventListener("wheel", e => {
+    if (!video && !photo) return;
+    e.preventDefault();
+    setZoom(crop.zoom * (e.deltaY < 0 ? 1.08 : 1 / 1.08));
+  }, { passive: false });
+  function sourceSize() { return video ? [video.videoWidth, video.videoHeight] : photo ? [photo.img.width, photo.img.height] : null; }
 
   // Drag to pan the photo.
   let drag = null;
-  view.addEventListener("pointerdown", e => { if (!photo) return; drag = { x: e.clientX, y: e.clientY }; view.setPointerCapture(e.pointerId); });
+  view.addEventListener("pointerdown", e => { if (!photo && !video) return; drag = { x: e.clientX, y: e.clientY }; view.setPointerCapture(e.pointerId); });
   view.addEventListener("pointermove", e => {
-    if (!drag || !photo) return;
-    const s = Math.min(photo.img.width, photo.img.height) / photo.zoom;
+    const size = sourceSize();
+    if (!drag || !size) return;
+    const s = Math.min(size[0], size[1]) / crop.zoom;
     const k = s / view.getBoundingClientRect().width;
-    photo.ox -= (e.clientX - drag.x) * k; photo.oy -= (e.clientY - drag.y) * k;
+    // In the mirrored webcam view, dragging right must move the raw crop the other way.
+    crop.ox += (video && mirror ? 1 : -1) * (e.clientX - drag.x) * k; crop.oy -= (e.clientY - drag.y) * k;
     drag = { x: e.clientX, y: e.clientY };
   });
-  view.addEventListener("pointerup", () => { drag = null; });
+  view.addEventListener("pointerup", () => { drag = null; saveCamCrop(); });
   view.addEventListener("pointercancel", () => { drag = null; });
 
   function drawSource() {
     const S = work.width;
-    if (video && video.readyState >= 2) {
-      const vw = video.videoWidth, vh = video.videoHeight, s = Math.min(vw, vh);
-      wctx.drawImage(video, (vw - s) / 2, (vh - s) / 2, s, s, 0, 0, S, S);
-      return true;
-    }
-    if (photo) {
-      const { img } = photo, s = Math.min(img.width, img.height) / photo.zoom;
-      photo.ox = Math.max(-(img.width - s) / 2, Math.min((img.width - s) / 2, photo.ox));
-      photo.oy = Math.max(-(img.height - s) / 2, Math.min((img.height - s) / 2, photo.oy));
-      wctx.drawImage(img, (img.width - s) / 2 + photo.ox, (img.height - s) / 2 + photo.oy, s, s, 0, 0, S, S);
-      return true;
-    }
-    return false;
+    const src = (video && video.readyState >= 2) ? video : photo ? photo.img : null;
+    if (!src) return false;
+    const [w, h] = video ? [video.videoWidth, video.videoHeight] : [src.width, src.height];
+    const s = Math.min(w, h) / crop.zoom;
+    crop.ox = Math.max(-(w - s) / 2, Math.min((w - s) / 2, crop.ox));
+    crop.oy = Math.max(-(h - s) / 2, Math.min((h - s) / 2, crop.oy));
+    wctx.drawImage(src, (w - s) / 2 + crop.ox, (h - s) / 2 + crop.oy, s, s, 0, 0, S, S);
+    return true;
   }
   function sampleWork() {
     const S = work.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3, box = Math.round(cell * 0.4);
@@ -614,13 +635,19 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
     scans[currentFace] = sampleWork();
     const next = SCAN_ORDER.find(f => !scans[f]);
     if (next) currentFace = next;
-    if (photo && next) { photo = null; zoomRow.hidden = true; captureBtn.disabled = true; badge.textContent = "Nächstes Foto aufnehmen"; }
+    if (photo && next) { photo = null; showZoom(false); captureBtn.disabled = true; badge.textContent = "Nächstes Foto aufnehmen"; }
     if (SCAN_ORDER.every(f => scans[f])) {
       classify(); clearSolution(); renderNet();
-      if (!next) { stopCamera(); photo = null; zoomRow.hidden = true; captureBtn.disabled = true; badge.textContent = "Alle Seiten gescannt"; }
+      if (!next) { photo = null; stopCamera(); showZoom(false); captureBtn.disabled = true; badge.textContent = "Alle Seiten gescannt"; }
       document.getElementById("h-net").scrollIntoView({ behavior: "smooth", block: "start" });
     }
     renderScanUI();
+  });
+  // Space bar captures, so the cube can be turned with both hands and shot without the mouse.
+  document.addEventListener("keydown", e => {
+    if (e.key !== " " || e.repeat || captureBtn.disabled) return;
+    if (e.target.closest("button, input, select, textarea, label")) return;
+    e.preventDefault(); captureBtn.click();
   });
   document.getElementById("resetScan").addEventListener("click", () => {
     scans = {}; currentFace = "F"; renderScanUI();
