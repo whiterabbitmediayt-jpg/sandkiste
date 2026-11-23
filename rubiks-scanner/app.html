@@ -147,6 +147,8 @@ p.zoom { margin-top: 4px; display: block; }
 .review .changed .swatch { border-style: dashed; }
 .review .nm { font: 600 12px var(--body); color: #ffffff; background: rgba(0,0,0,.7); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
 .review-hint { flex-basis: 100%; font-size: 13px; color: var(--muted); }
+.review-warn { flex-basis: 100%; font-size: 14px; color: var(--warn); font-weight: 500; }
+.status .note { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
 .linkish { background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-size: 13px; color: var(--accent); text-decoration: underline; cursor: pointer; font-weight: 500; }
 .linkish:hover { border: 0; }
 .tips { font-size: 13px; color: var(--muted); padding-left: 18px; margin: 0; display: grid; gap: 4px; }
@@ -238,6 +240,7 @@ p.zoom { margin-top: 4px; display: block; }
         <div class="controls" id="reviewBar" hidden>
           <button class="primary" id="accept" type="button">Übernehmen</button>
           <button id="retake" type="button">Nochmal aufnehmen</button>
+          <p class="review-warn" id="reviewWarn" hidden></p>
           <p class="review-hint">Feld anklicken wechselt zur nächstwahrscheinlichen Farbe. Leertaste übernimmt, Esc verwirft.</p>
         </div>
         <div class="controls" id="mainControls">
@@ -413,7 +416,7 @@ p.zoom { margin-top: 4px; display: block; }
   function centerName(f) { return scans[f] ? CANON[scans[f].labels[4]].name : null; }
   function instrFor(f) {
     if (inSequence(f)) {
-      if (f === SCAN_ORDER[0]) return `Halte eine beliebige Seite gerade zur Kamera. Das ist ab jetzt die Oberseite. Die Seite, die dabei im Bild ${dispDir("unten")} liegt, wird die Vorderseite.`;
+      if (f === SCAN_ORDER[0]) return `Halte eine beliebige Seite gerade zur Kamera. Das ist ab jetzt die Oberseite. Wichtig ist nur, dass du jede der sechs Seiten genau einmal aufnimmst. Ist eine Seite verdreht oder die Reihenfolge anders, korrigiert die App das selbst.`;
       const dir = STEP_MOVE[f] === TILT ? "unten" : "rechts";
       return `Dreh den Würfel eine Vierteldrehung, sodass die Seite, die im Bild ${dispDir(dir)} liegt, zur Kamera zeigt. Der kleine Würfel zeigt die Bewegung.`;
     }
@@ -573,6 +576,63 @@ p.zoom { margin-top: 4px; display: block; }
     if (eo.reduce((a, b) => a + b, 0) % 2) errors.push("Eine Kante ist gekippt. Prüfe die Kantenfelder oder scanne eine Seite neu.");
     if (parity(cp) !== parity(ep)) errors.push("Zwei Steine sind vertauscht. Prüfe, ob du jede Seite in der richtigen Ausrichtung gescannt hast.");
     return { ok: errors.length === 0, errors, bad };
+  }
+  // Fast yes/no check of a full sticker layout, used while searching for the right assembly.
+  function fastValid(lab) {
+    const ctr = CENTER_IDX.map(i => lab[i]);
+    if (new Set(ctr).size < 6) return false;
+    const cls = x => ctr.indexOf(x);
+    const cp = [], ep = []; let co = 0, eo = 0, used = 0;
+    for (let i = 0; i < 8; i++) {
+      const cols = CF[i].map(f => cls(lab[f]));
+      let o = -1;
+      for (let k = 0; k < 3; k++) if (cols[k] === 0 || cols[k] === 3) { if (o >= 0) return false; o = k; }
+      if (o < 0) return false;
+      const j = CC.findIndex(c => c[0] === cols[o] && c[1] === cols[(o + 1) % 3] && c[2] === cols[(o + 2) % 3]);
+      if (j < 0 || (used >> j) & 1) return false;
+      used |= 1 << j; cp.push(j); co += o;
+    }
+    if (co % 3) return false;
+    used = 0;
+    for (let i = 0; i < 12; i++) {
+      const a = cls(lab[EF[i][0]]), b = cls(lab[EF[i][1]]);
+      let j = EC.findIndex(e => e[0] === a && e[1] === b), o = 0;
+      if (j < 0) { j = EC.findIndex(e => e[0] === b && e[1] === a); o = 1; }
+      if (j < 0 || (used >> j) & 1) return false;
+      used |= 1 << j; ep.push(j); eo += o;
+    }
+    return eo % 2 === 0 && parity(cp) === parity(ep);
+  }
+  // Puts the six scanned faces together even if some were scanned in the wrong order or turned.
+  // The first scan stays the top face as captured (that fixes the whole cube's orientation); every other
+  // scan may go to any position in any of four turns. Prefers the layout closest to the planned one.
+  function assemble(grids /* label arrays in SCAN_ORDER */) {
+    const planned = new Array(54);
+    SCAN_ORDER.forEach((f, gi) => grids[gi].forEach((c, k) => { planned[FACES.indexOf(f) * 9 + k] = c; }));
+    if (fastValid(planned)) return { lab: planned, moved: 0, turned: 0 };
+    const rots = grids.map(g => { const r = [g]; for (let i = 1; i < 4; i++) r.push(rotCW(r[i - 1])); return r; });
+    const anchor = SCAN_ORDER.indexOf("U"), others = [0, 1, 2, 3, 4, 5].filter(i => i !== anchor);
+    const slots = ["R", "F", "D", "L", "B"].map(f => FACES.indexOf(f));
+    const lab = new Array(54);
+    rots[anchor][0].forEach((c, k) => { lab[FACES.indexOf("U") * 9 + k] = c; });
+    let best = null;
+    const perms = [];
+    (function permute(arr, cur) { if (!arr.length) { perms.push(cur); return; } arr.forEach((x, i) => permute(arr.filter((_, j) => j !== i), cur.concat(x))); })(others, []);
+    for (const perm of perms) {
+      for (let code = 0; code < 1024; code++) {
+        let turned = 0;
+        for (let s2 = 0; s2 < 5; s2++) {
+          const r = (code >> (2 * s2)) & 3; if (r) turned++;
+          const g = rots[perm[s2]][r], base = slots[s2] * 9;
+          for (let k = 0; k < 9; k++) lab[base + k] = g[k];
+        }
+        if (!fastValid(lab)) continue;
+        const moved = perm.filter((g, s2) => FACES.indexOf(SCAN_ORDER[g]) !== slots[s2]).length;
+        const cost = moved * 10 + turned;
+        if (!best || cost < best.cost) best = { lab: lab.slice(), moved, turned, cost };
+      }
+    }
+    return best;
   }
   function parity(p) { let s = 0; for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) if (p[i] > p[j]) s++; return s % 2; }
   function isSolved(fl) { return fl.every((c, i) => c === fl[9 * Math.floor(i / 9) + 4]); }
@@ -971,6 +1031,7 @@ p.zoom { margin-top: 4px; display: block; }
     const sample = sampleWork(), ranks = sample.lab.map(rankColors);
     review = { face: currentFace, sample, ranks, labels: ranks.map(r => r[0]), fx: !!(video && mirror), fy: !!(video && mirrorV) };
     reviewBar.hidden = false; mainControls.hidden = true;
+    updateReviewWarn();
     badge.textContent = "Prüfen · " + FACE_DE[currentFace];
     renderReview();
   });
@@ -994,10 +1055,17 @@ p.zoom { margin-top: 4px; display: block; }
       b.addEventListener("click", () => {
         const rk = review.ranks[k];
         review.labels[k] = rk[(rk.indexOf(review.labels[k]) + 1) % 6];
-        renderReview();
+        renderReview(); updateReviewWarn();
       });
       reviewEl.appendChild(b);
     }
+  }
+  function updateReviewWarn() {
+    const w = document.getElementById("reviewWarn");
+    if (!review) { w.hidden = true; return; }
+    const dup = SCAN_ORDER.find(f => f !== review.face && scans[f] && scans[f].labels[4] === review.labels[4]);
+    w.hidden = !dup;
+    if (dup) w.textContent = `Achtung: Eine Seite mit der Mitte ${CANON[review.labels[4]].name} hast du schon gescannt (${SCAN_ORDER.indexOf(dup) + 1}. ${FACE_DE[dup]}). Liegt die richtige Seite vor der Kamera?`;
   }
   function endReview() { review = null; renderReview(); reviewBar.hidden = true; mainControls.hidden = false; if (video) updateBadge(); }
   document.getElementById("retake").addEventListener("click", () => { endReview(); if (photo) badge.textContent = "Foto · " + FACE_DE[currentFace]; });
@@ -1011,8 +1079,7 @@ p.zoom { margin-top: 4px; display: block; }
     if (next) currentFace = next;
     if (photo && next) { photo = null; showZoom(false); captureBtn.disabled = true; badge.textContent = "Nächstes Foto aufnehmen"; }
     if (SCAN_ORDER.every(f => scans[f])) {
-      facelets = []; FACES.forEach(f => scans[f].labels.forEach(c => facelets.push(c)));
-      source = "scan"; clearSolution(); renderNet();
+      assembleFromScans();
       if (!next) { photo = null; stopCamera(); showZoom(false); captureBtn.disabled = true; badge.textContent = "Alle Seiten gescannt"; }
       document.getElementById("h-net").scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -1077,6 +1144,27 @@ p.zoom { margin-top: 4px; display: block; }
     });
   }
 
+  let assemblyNote = "";
+  function assembleFromScans() {
+    const grids = SCAN_ORDER.map(f => scans[f].labels);
+    const all = grids.flat(), counts = [0, 0, 0, 0, 0, 0]; all.forEach(c => counts[c]++);
+    const centers = grids.map(g => g[4]);
+    let res = null;
+    if (counts.every(n => n === 9) && new Set(centers).size === 6) res = assemble(grids);
+    if (res) {
+      facelets = res.lab;
+      assemblyNote = (res.moved || res.turned)
+        ? "Einige Seiten waren verdreht oder in anderer Reihenfolge gescannt. Die App hat sie selbst richtig zusammengesetzt."
+        : "";
+    } else {
+      facelets = []; FACES.forEach(f => scans[f].labels.forEach(c => facelets.push(c)));
+      assemblyNote = new Set(centers).size < 6
+        ? "Zwei Aufnahmen haben dieselbe Mittelfarbe. Wahrscheinlich hast du eine Seite doppelt gescannt und eine ausgelassen. Klicke oben die doppelte Seite an und scanne die fehlende."
+        : "Die Seiten passen in keiner Anordnung zusammen. Wahrscheinlich ist eine Farbe falsch erkannt. Vergleiche das Netz mit deinem Würfel und korrigiere die Felder.";
+    }
+    source = "scan"; clearSolution(); renderNet();
+  }
+
   // ---------- Net editor ----------
   const netEl = document.getElementById("net"), statusEl = document.getElementById("status"), solveBtn = document.getElementById("solveBtn");
   let lastCheck = { ok: false };
@@ -1103,7 +1191,7 @@ p.zoom { margin-top: 4px; display: block; }
         b.type = "button"; b.className = "sticker" + (k === 4 ? " center" : "") + (lastCheck.bad.has(i) ? " bad" : "");
         b.style.background = colorOf(facelets[i]).hex;
         b.setAttribute("aria-label", `${FACE_DE[f]}, Feld ${k + 1}: ${colorOf(facelets[i]).name}`);
-        b.addEventListener("click", () => { facelets[i] = paint; clearSolution(); renderNet(); });
+        b.addEventListener("click", () => { facelets[i] = paint; assemblyNote = ""; clearSolution(); renderNet(); });
         face.appendChild(b);
       }
       wrap.append(cap, face); netEl.appendChild(wrap);
@@ -1113,11 +1201,13 @@ p.zoom { margin-top: 4px; display: block; }
     if (lastCheck.ok) {
       statusEl.dataset.kind = "ok";
       statusEl.textContent = isSolved(facelets) ? "Dieser Würfel ist bereits gelöst." : "Der Würfel ist gültig und kann gelöst werden.";
+      if (assemblyNote && source === "scan") { const n = document.createElement("span"); n.className = "note"; n.textContent = assemblyNote; statusEl.appendChild(n); }
     } else {
       statusEl.dataset.kind = "err";
       const p = document.createElement("strong"); p.textContent = "Das passt noch nicht:";
       const ul = document.createElement("ul"); lastCheck.errors.forEach(t => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
       statusEl.append(p, ul);
+      if (assemblyNote && source === "scan") { const n = document.createElement("span"); n.className = "note"; n.textContent = assemblyNote; statusEl.appendChild(n); }
     }
     renderPalette(); refreshSolveBtn(); renderHold();
     if (!solution) paintCube(facelets, null);
