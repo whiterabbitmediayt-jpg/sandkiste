@@ -99,6 +99,7 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .btn input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .zoom { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
 .zoom input { flex: 1; accent-color: var(--accent); }
+.zoom select { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 
 .instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; gap: 8px; }
 .instr .eyebrow { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
@@ -196,6 +197,9 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
           <button class="primary" id="capture" type="button" disabled>Seite aufnehmen</button>
           <button id="startCam" type="button">Live-Kamera starten</button>
           <label class="btn" for="photo">Foto aufnehmen<input id="photo" type="file" accept="image/*" capture="environment"></label>
+        </div>
+        <div class="zoom" id="camRow" hidden>
+          <label for="camSelect">Kamera</label><select id="camSelect"></select>
         </div>
         <div class="zoom" id="zoomRow" hidden>
           <label for="zoom">Zoom</label><input id="zoom" type="range" min="1" max="4" step="0.01" value="1">
@@ -477,28 +481,48 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
   const camNotice = document.getElementById("camNotice");
   const captureBtn = document.getElementById("capture");
   const zoomRow = document.getElementById("zoomRow"), zoomEl = document.getElementById("zoom");
-  let video = null, stream = null, photo = null, live = [], frame = 0;
+  let video = null, stream = null, photo = null, live = [], frame = 0, mirror = false;
+  const camRow = document.getElementById("camRow"), camSelect = document.getElementById("camSelect");
   const GRID_MARGIN = 0.14;
 
-  async function startCamera() {
+  async function startCamera(deviceId) {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return camFail();
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      const base = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } };
+      stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign(base, { width: { ideal: 1280 }, height: { ideal: 960 } }), audio: false });
+      const track = stream.getVideoTracks()[0], settings = track.getSettings ? track.getSettings() : {};
+      // Webcams facing the user are shown like a mirror; sampling always reads the unmirrored frame.
+      mirror = settings.facingMode !== "environment";
+      fillCameraList(settings.deviceId);
       video = document.createElement("video");
       video.playsInline = true; video.muted = true; video.srcObject = stream;
       await video.play();
       photo = null; zoomRow.hidden = true; camNotice.hidden = true;
-      badge.textContent = "Live";
+      badge.textContent = mirror ? "Live · gespiegelt" : "Live";
       captureBtn.disabled = false;
       document.getElementById("startCam").textContent = "Kamera stoppen";
     } catch (e) { camFail(); }
   }
   function stopCamera() {
     if (stream) stream.getTracks().forEach(t => t.stop());
-    stream = null; video = null;
+    stream = null; video = null; camRow.hidden = true;
     document.getElementById("startCam").textContent = "Live-Kamera starten";
     if (!photo) { badge.textContent = "Keine Kamera"; captureBtn.disabled = true; }
   }
+  async function fillCameraList(activeId) {
+    try {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
+      camSelect.innerHTML = "";
+      cams.forEach((d, i) => {
+        const o = document.createElement("option"); o.value = d.deviceId; o.textContent = d.label || `Kamera ${i + 1}`;
+        if (d.deviceId === activeId) o.selected = true;
+        camSelect.appendChild(o);
+      });
+      camRow.hidden = cams.length < 2;
+    } catch (e) { camRow.hidden = true; }
+  }
+  camSelect.addEventListener("change", () => startCamera(camSelect.value));
   function camFail() {
     camNotice.hidden = false;
     camNotice.textContent = "Die Live-Kamera ist hier nicht verfügbar. Tippe auf „Foto aufnehmen“: Auf dem Handy öffnet sich die Kamera, am Computer kannst du ein Foto auswählen.";
@@ -567,7 +591,9 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
     const S = view.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3;
     const has = drawSource();
     if (has) {
-      vctx.drawImage(work, 0, 0);
+      const flip = !!(video && mirror);
+      if (flip) { vctx.save(); vctx.translate(S, 0); vctx.scale(-1, 1); vctx.drawImage(work, 0, 0); vctx.restore(); }
+      else vctx.drawImage(work, 0, 0);
       if (frame++ % 6 === 0) live = sampleWork().rgb;
       vctx.fillStyle = "rgba(0,0,0,0.35)";
       vctx.fillRect(0, 0, S, m); vctx.fillRect(0, S - m, S, m); vctx.fillRect(0, m, m, S - 2 * m); vctx.fillRect(S - m, m, m, S - 2 * m);
@@ -583,7 +609,8 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
       vctx.beginPath(); vctx.moveTo(m, m + i * cell); vctx.lineTo(S - m, m + i * cell); vctx.stroke();
     }
     if (live.length) live.forEach((c, i) => {
-      const x = m + (i % 3) * cell + cell - 26, y = m + Math.floor(i / 3) * cell + 8;
+      const col = (video && mirror) ? 2 - (i % 3) : i % 3;
+      const x = m + col * cell + cell - 26, y = m + Math.floor(i / 3) * cell + 8;
       vctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; vctx.fillRect(x, y, 18, 18);
       vctx.strokeStyle = "#fff"; vctx.lineWidth = 2; vctx.strokeRect(x, y, 18, 18);
     });
