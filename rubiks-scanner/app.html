@@ -94,7 +94,7 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 #zoomVal { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
 p.zoom { margin-top: 4px; }
 .zoom button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
-#mirrorBtn[aria-pressed="true"] { border-color: var(--accent); }
+#mirrorBtn[aria-pressed="true"], #mirrorVBtn[aria-pressed="true"] { border-color: var(--accent); }
 .imgfix { margin-top: 12px; display: grid; gap: 8px; }
 .camset { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .camset summary { cursor: pointer; font-weight: 600; font-size: 14px; }
@@ -226,7 +226,8 @@ p.zoom { margin-top: 4px; }
         </div>
         <div class="zoom" id="orientRow" hidden>
           <button type="button" id="rotBtn">Bild drehen · 0°</button>
-          <button type="button" id="mirrorBtn" aria-pressed="true">Spiegeln: an</button>
+          <button type="button" id="mirrorBtn" aria-pressed="true">Horizontal spiegeln: an</button>
+          <button type="button" id="mirrorVBtn" aria-pressed="false">Vertikal spiegeln: aus</button>
         </div>
         <div class="zoom" id="zoomRow" hidden>
           <label for="zoom">Zoom</label><input id="zoom" type="range" min="1" max="5" step="0.01" value="1">
@@ -340,16 +341,18 @@ p.zoom { margin-top: 4px; }
   const EC = [[0,1],[0,2],[0,4],[0,5],[3,1],[3,2],[3,4],[3,5],[2,1],[2,4],[5,4],[5,1]];
 
   // Directions refer to the preview. In a mirrored preview the cube's right side shows on the left.
+  // A vertically mirrored preview swaps "oben" and "unten" in the same way.
   function instrFor(f) {
-    const side = (video && mirror) ? "links" : "rechts";
-    const note = (video && mirror) ? " Das Bild ist gespiegelt, deshalb links." : "";
+    const fx = !!(video && mirror), fy = !!(video && mirrorV);
+    const side = fx ? "links" : "rechts", top = fy ? "unten" : "oben", bottom = fy ? "oben" : "unten";
+    const note = fx ? " Das Bild ist horizontal gespiegelt, deshalb links." : "";
     return {
-      F: "Richte eine Seite gerade zur Kamera. Das ist ab jetzt die Vorderseite. Die Seite, die im Bild oben liegt, ist die Oberseite. So liegt der Würfel später auch beim Lösen.",
-      R: `Drehe den Würfel, bis die Seite, die im Bild ${side} lag, zur Kamera zeigt. Die Oberseite bleibt dabei im Bild oben.${note}`,
-      B: "Weiter in dieselbe Richtung drehen, bis die Rückseite zur Kamera zeigt. Die Oberseite bleibt im Bild oben.",
-      L: "Noch einmal in dieselbe Richtung drehen. Jetzt zeigt die vierte Seite zur Kamera. Die Oberseite bleibt im Bild oben.",
-      U: "Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Oberseite zur Kamera zeigt. Die Vorderseite liegt danach im Bild unten.",
-      D: "Zurück zur Vorderseite. Kippe den Würfel so, dass die Unterseite zur Kamera zeigt. Die Vorderseite liegt danach im Bild oben.",
+      F: `Richte eine Seite gerade zur Kamera. Das ist ab jetzt die Vorderseite. Die Seite, die im Bild ${top} liegt, ist die Oberseite. So liegt der Würfel später auch beim Lösen.`,
+      R: `Drehe den Würfel, bis die Seite, die im Bild ${side} lag, zur Kamera zeigt. Die Oberseite bleibt dabei im Bild ${top}.${note}`,
+      B: `Weiter in dieselbe Richtung drehen, bis die Rückseite zur Kamera zeigt. Die Oberseite bleibt im Bild ${top}.`,
+      L: `Noch einmal in dieselbe Richtung drehen. Jetzt zeigt die vierte Seite zur Kamera. Die Oberseite bleibt im Bild ${top}.`,
+      U: `Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Oberseite zur Kamera zeigt. Die Vorderseite liegt danach im Bild ${bottom}.`,
+      D: `Zurück zur Vorderseite. Kippe den Würfel so, dass die Unterseite zur Kamera zeigt. Die Vorderseite liegt danach im Bild ${top}.`,
     }[f];
   }
 
@@ -563,19 +566,25 @@ p.zoom { margin-top: 4px; }
   // to both the preview and the scan; mirroring only changes the preview.
   const ORIENT_KEY = "wuerfel-scanner-webcam-orient";
   const orientRow = document.getElementById("orientRow"), rotBtn = document.getElementById("rotBtn"), mirrorBtn = document.getElementById("mirrorBtn");
-  let rotation = 0, mirrorPref = null;
+  const mirrorVBtn = document.getElementById("mirrorVBtn");
+  let rotation = 0, mirrorPref = null, mirrorV = false;
   try {
     const o = JSON.parse(localStorage.getItem(ORIENT_KEY));
-    if (o) { rotation = [0, 90, 180, 270].includes(o.rot) ? o.rot : 0; mirrorPref = typeof o.mirror === "boolean" ? o.mirror : null; }
+    if (o) { rotation = [0, 90, 180, 270].includes(o.rot) ? o.rot : 0; mirrorPref = typeof o.mirror === "boolean" ? o.mirror : null; mirrorV = o.mirrorV === true; }
   } catch (e) {}
-  function saveOrient() { try { localStorage.setItem(ORIENT_KEY, JSON.stringify({ rot: rotation, mirror: mirrorPref })); } catch (e) {} }
+  function saveOrient() { try { localStorage.setItem(ORIENT_KEY, JSON.stringify({ rot: rotation, mirror: mirrorPref, mirrorV })); } catch (e) {} }
   function updateOrientUI() {
     rotBtn.textContent = `Bild drehen · ${rotation}°`;
     mirrorBtn.setAttribute("aria-pressed", String(mirror));
-    mirrorBtn.textContent = `Spiegeln: ${mirror ? "an" : "aus"}`;
+    mirrorBtn.textContent = `Horizontal spiegeln: ${mirror ? "an" : "aus"}`;
+    mirrorVBtn.setAttribute("aria-pressed", String(mirrorV));
+    mirrorVBtn.textContent = `Vertikal spiegeln: ${mirrorV ? "an" : "aus"}`;
   }
   rotBtn.addEventListener("click", () => { rotation = (rotation + 90) % 360; saveOrient(); updateOrientUI(); });
   mirrorBtn.addEventListener("click", () => { mirror = !mirror; mirrorPref = mirror; saveOrient(); updateOrientUI(); updateBadge(); renderScanUI(); });
+  mirrorVBtn.addEventListener("click", () => { mirrorV = !mirrorV; saveOrient(); updateOrientUI(); updateBadge(); renderScanUI(); });
+  // Preview flips only. Maps between crop coordinates (what is sampled) and the preview; it is its own inverse.
+  function toView([x, y]) { return [(video && mirror) ? 1 - x : x, (video && mirrorV) ? 1 - y : y]; }
   const camRow = document.getElementById("camRow"), camSelect = document.getElementById("camSelect");
   // The scan grid is a quadrilateral with draggable corners (in crop coordinates 0..1, before mirroring),
   // so a face seen at an angle is still split into its nine stickers.
@@ -633,7 +642,7 @@ p.zoom { margin-top: 4px; }
   }
   function updateBadge() {
     if (!video) return;
-    badge.textContent = `Live · ${video.videoWidth}×${video.videoHeight}` + (mirror ? " · gespiegelt" : "");
+    badge.textContent = `Live · ${video.videoWidth}×${video.videoHeight}` + (mirror || mirrorV ? " · gespiegelt" : "");
   }
   // Some browsers start low; ask for HD explicitly if the first frame is small.
   async function ensureResolution(track) {
@@ -740,9 +749,9 @@ p.zoom { margin-top: 4px; }
   let drag = null;
   function viewPoint(e) { const r = view.getBoundingClientRect(); return [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; }
   view.addEventListener("pointerdown", e => {
-    const [px, py] = viewPoint(e), flip = !!(video && mirror);
+    const [px, py] = viewPoint(e);
     let best = -1, bd = 0.065;
-    corners.forEach(([x, y], k) => { const d = Math.hypot((flip ? 1 - x : x) - px, y - py); if (d < bd) { bd = d; best = k; } });
+    corners.forEach((c, k) => { const [x, y] = toView(c); const d = Math.hypot(x - px, y - py); if (d < bd) { bd = d; best = k; } });
     if (best >= 0) drag = { corner: best };
     else if (photo || video) drag = { x: e.clientX, y: e.clientY };
     else return;
@@ -751,7 +760,7 @@ p.zoom { margin-top: 4px; }
   view.addEventListener("pointermove", e => {
     if (drag && drag.corner != null) {
       const [px, py] = viewPoint(e), cx = Math.max(0.01, Math.min(0.99, px)), cy = Math.max(0.01, Math.min(0.99, py));
-      corners[drag.corner] = [(video && mirror) ? 1 - cx : cx, cy];
+      corners[drag.corner] = toView([cx, cy]);
       return;
     }
     const size = sourceSize();
@@ -759,8 +768,9 @@ p.zoom { margin-top: 4px; }
     const s = Math.min(size[0], size[1]) / crop.zoom;
     const k = s / view.getBoundingClientRect().width;
     // Map the screen drag back through mirror and rotation so the picture follows the pointer.
-    let dx = (e.clientX - drag.x) * k; const dy = (e.clientY - drag.y) * k;
+    let dx = (e.clientX - drag.x) * k, dy = (e.clientY - drag.y) * k;
     if (video && mirror) dx = -dx;
+    if (video && mirrorV) dy = -dy;
     const t = (video ? rotation : 0) * Math.PI / 180, c = Math.cos(t), sn = Math.sin(t);
     crop.ox -= dx * c + dy * sn; crop.oy -= -dx * sn + dy * c;
     drag = { x: e.clientX, y: e.clientY };
@@ -780,12 +790,12 @@ p.zoom { margin-top: 4px; }
     return [(w - s) / 2 + crop.ox, (h - s) / 2 + crop.oy, s];
   }
   // Draws the square crop into ctx: camera rotation first, then the optional preview mirror.
-  function drawCrop(ctx, S, flipX) {
+  function drawCrop(ctx, S, flipX, flipY) {
     const cs = currentSource(); if (!cs) return false;
     const [sx, sy, s] = cropRect(cs.w, cs.h);
     const rot = video ? rotation : 0;
     ctx.save(); ctx.translate(S / 2, S / 2);
-    if (flipX) ctx.scale(-1, 1);
+    if (flipX || flipY) ctx.scale(flipX ? -1 : 1, flipY ? -1 : 1);
     if (rot) ctx.rotate(rot * Math.PI / 180);
     ctx.filter = filterStr();
     ctx.drawImage(cs.src, sx, sy, s, s, -S / 2, -S / 2, S, S);
@@ -814,13 +824,13 @@ p.zoom { margin-top: 4px; }
   }
   function render() {
     if (review) { requestAnimationFrame(render); return; }
-    const S = view.width, u = S / 480, flipD = !!(video && mirror), H = quadMap(corners);
-    const toD = ([x, y]) => [(flipD ? 1 - x : x) * S, y * S];
+    const S = view.width, u = S / 480, H = quadMap(corners);
+    const toD = p => { const [x, y] = toView(p); return [x * S, y * S]; };
     const quad = corners.map(toD);
     const cs = currentSource();
     if (cs) {
       vctx.imageSmoothingQuality = "high";
-      drawCrop(vctx, S, !!(video && mirror));
+      drawCrop(vctx, S, !!(video && mirror), !!(video && mirrorV));
       if (frame++ % 6 === 0) { drawSource(); live = sampleWork().rgb; }
       vctx.fillStyle = "rgba(0,0,0,0.35)";
       vctx.beginPath(); vctx.rect(0, 0, S, S); vctx.moveTo(...quad[0]); quad.slice(1).forEach(p => vctx.lineTo(...p)); vctx.closePath();
@@ -856,7 +866,7 @@ p.zoom { margin-top: 4px; }
   captureBtn.addEventListener("click", () => {
     if (review || !drawSource()) return;
     const sample = sampleWork(), ranks = sample.lab.map(rankColors);
-    review = { face: currentFace, sample, ranks, labels: ranks.map(r => r[0]), flip: !!(video && mirror) };
+    review = { face: currentFace, sample, ranks, labels: ranks.map(r => r[0]), fx: !!(video && mirror), fy: !!(video && mirrorV) };
     reviewBar.hidden = false; mainControls.hidden = true;
     badge.textContent = "Prüfen · " + FACE_DE[currentFace];
     renderReview();
@@ -864,7 +874,7 @@ p.zoom { margin-top: 4px; }
   function renderReview() {
     reviewEl.innerHTML = ""; reviewEl.hidden = !review;
     if (!review) return;
-    const H = quadMap(corners), toD = ([x, y]) => [review.flip ? 1 - x : x, y];
+    const H = quadMap(corners), toD = ([x, y]) => [review.fx ? 1 - x : x, review.fy ? 1 - y : y];
     for (let k = 0; k < 9; k++) {
       const r = Math.floor(k / 3), cc = k % 3, c = review.labels[k];
       const b = document.createElement("button"); b.type = "button";
