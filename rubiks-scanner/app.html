@@ -95,6 +95,7 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 p.zoom { margin-top: 4px; }
 .zoom button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
 #mirrorBtn[aria-pressed="true"] { border-color: var(--accent); }
+.imgfix { margin-top: 12px; display: grid; gap: 8px; }
 .camset { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .camset summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 .camset-body { display: grid; gap: 10px; padding-top: 12px; }
@@ -232,6 +233,12 @@ p.zoom { margin-top: 4px; }
           <span id="zoomVal">1,0×</span>
         </div>
         <p class="zoom" id="zoomHint" hidden>Mausrad zoomt, Bild ziehen verschiebt den Ausschnitt.</p>
+        <div class="imgfix" id="imgFix" hidden>
+          <div class="ctl"><label for="fixB">Helligkeit</label><input id="fixB" type="range" min="0.4" max="1.6" step="0.05" value="1"><output id="fixBv">1,00</output></div>
+          <div class="ctl"><label for="fixC">Kontrast</label><input id="fixC" type="range" min="0.6" max="2" step="0.05" value="1"><output id="fixCv">1,00</output></div>
+          <div class="ctl"><label for="fixS">Farbsättigung</label><input id="fixS" type="range" min="0.5" max="3" step="0.05" value="1"><output id="fixSv">1,00</output></div>
+          <p class="zoom">Bildkorrektur für helles oder blasses Licht. Sie gilt auch für die Farberkennung. <button type="button" class="linkish" id="resetFix">Zurücksetzen</button></p>
+        </div>
         <p class="zoom" id="gridHint">Liegt die Würfelseite schräg im Bild, zieh die vier runden Griffe auf ihre Ecken. <button type="button" class="linkish" id="resetGrid">Raster zurücksetzen</button></p>
         <details class="camset" id="camSet" hidden>
           <summary>Kamera-Einstellungen</summary>
@@ -526,7 +533,31 @@ p.zoom { margin-top: 4px; }
     zoomEl.value = crop.zoom; zoomVal.textContent = crop.zoom.toFixed(1).replace(".", ",") + "×";
     saveCamCrop();
   }
-  function showZoom(on) { zoomRow.hidden = !on; zoomHint.hidden = !on; }
+  function showZoom(on) { zoomRow.hidden = !on; zoomHint.hidden = !on; document.getElementById("imgFix").hidden = !on; }
+
+  // Software image correction (canvas filter): works in every browser, also where the camera itself
+  // cannot be adjusted. It is applied before sampling, so it changes what the colour detection sees.
+  const FIX_KEY = "wuerfel-scanner-bildkorrektur";
+  let fix = { b: 1, c: 1, s: 1 };
+  try { const f = JSON.parse(localStorage.getItem(FIX_KEY)); if (f && [f.b, f.c, f.s].every(Number.isFinite)) fix = f; } catch (e) {}
+  function filterStr() { return (fix.b === 1 && fix.c === 1 && fix.s === 1) ? "none" : `brightness(${fix.b}) contrast(${fix.c}) saturate(${fix.s})`; }
+  function syncFix() {
+    [["b", "fixB"], ["c", "fixC"], ["s", "fixS"]].forEach(([k, id]) => {
+      document.getElementById(id).value = fix[k];
+      document.getElementById(id + "v").textContent = fix[k].toFixed(2).replace(".", ",");
+    });
+  }
+  [["b", "fixB"], ["c", "fixC"], ["s", "fixS"]].forEach(([k, id]) => {
+    document.getElementById(id).addEventListener("input", e => {
+      fix[k] = +e.target.value; syncFix();
+      try { localStorage.setItem(FIX_KEY, JSON.stringify(fix)); } catch (err) {}
+    });
+  });
+  document.getElementById("resetFix").addEventListener("click", () => {
+    fix = { b: 1, c: 1, s: 1 }; syncFix();
+    try { localStorage.setItem(FIX_KEY, JSON.stringify(fix)); } catch (err) {}
+  });
+  syncFix();
 
   // Webcam orientation: rotation fixes a camera that sits upside down or sideways and applies
   // to both the preview and the scan; mirroring only changes the preview.
@@ -756,6 +787,7 @@ p.zoom { margin-top: 4px; }
     ctx.save(); ctx.translate(S / 2, S / 2);
     if (flipX) ctx.scale(-1, 1);
     if (rot) ctx.rotate(rot * Math.PI / 180);
+    ctx.filter = filterStr();
     ctx.drawImage(cs.src, sx, sy, s, s, -S / 2, -S / 2, S, S);
     ctx.restore();
     return true;
