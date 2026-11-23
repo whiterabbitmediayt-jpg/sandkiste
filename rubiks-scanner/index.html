@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Würfel-Scanner</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a workbench — camera on the left, checklist on the right, then net editor and solution player stacked below. */
+:root {
+  --bg: #eceef2;
+  --surface: #ffffff;
+  --sunken: #e2e5eb;
+  --ink: #14171c;
+  --muted: #59626e;
+  --line: #d3d8e0;
+  --accent: #1d4ed8;
+  --accent-ink: #ffffff;
+  --plastic: #111317;
+  --ok: #17803f;
+  --warn: #a3520a;
+  --err: #c0262d;
+  --display: "Chakra Petch", "Arial Narrow", system-ui, sans-serif;
+  --body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --surface: #171a20; --sunken: #0b0d10; --ink: #e8ebf0; --muted: #98a1ae;
+    --line: #2a2f38; --accent: #7aa0ff; --accent-ink: #0b0f1a; --plastic: #050608;
+    --ok: #4cc47a; --warn: #f0a04b; --err: #ff6b6f; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #171a20; --sunken: #0b0d10; --ink: #e8ebf0; --muted: #98a1ae;
+  --line: #2a2f38; --accent: #7aa0ff; --accent-ink: #0b0f1a; --plastic: #050608;
+  --ok: #4cc47a; --warn: #f0a04b; --err: #ff6b6f; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 28px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; letter-spacing: 0.01em; }
+h1 { font-size: clamp(28px, 6vw, 40px); font-weight: 700; line-height: 1.05; }
+h2 { font-size: 22px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+h3 { font-size: 15px; font-weight: 600; }
+p { margin: 0; }
+.muted { color: var(--muted); }
+.step-no {
+  font-family: var(--mono); font-size: 13px; font-weight: 700; width: 26px; height: 26px; border-radius: 6px;
+  display: inline-grid; place-items: center; background: var(--ink); color: var(--bg);
+}
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+header .lede { max-width: 60ch; color: var(--muted); margin-top: 6px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500;
+  padding: 5px 11px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); white-space: nowrap;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.chip[data-state="ready"] .dot { background: var(--ok); }
+.chip[data-state="error"] .dot { background: var(--err); }
+.chip[data-state="loading"] .dot { animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .25; } }
+
+section.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 18px; min-width: 0; }
+@media (max-width: 480px) { section.panel { padding: 14px; } }
+.panel-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+
+/* Scanner */
+.scan-grid { display: grid; grid-template-columns: minmax(0, 440px) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .scan-grid { grid-template-columns: minmax(0, 1fr); } }
+.viewer { position: relative; width: 100%; max-width: 440px; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--plastic); touch-action: none; }
+.viewer canvas { width: 100%; height: 100%; display: block; }
+.viewer .badge {
+  position: absolute; left: 10px; top: 10px; font-family: var(--mono); font-size: 12px; font-weight: 700;
+  background: rgba(0,0,0,.6); color: #fff; padding: 4px 8px; border-radius: 6px;
+}
+.controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+button, .btn {
+  font: inherit; font-weight: 600; font-size: 14px; cursor: pointer; border-radius: 9px; padding: 10px 14px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 42px;
+}
+button:hover, .btn:hover { border-color: var(--muted); }
+button:focus-visible, .btn:focus-within, .sticker:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.primary:hover { filter: brightness(1.08); }
+button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+.btn input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.zoom { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 13px; color: var(--muted); }
+.zoom input { flex: 1; accent-color: var(--accent); }
+
+.instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; gap: 8px; }
+.instr .eyebrow { font-family: var(--mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.instr h3 { font-size: 20px; }
+.notice { font-size: 13px; color: var(--warn); }
+.faces { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.faces button { width: 100%; flex-direction: column; gap: 6px; padding: 10px 6px; min-height: 0; font-weight: 500; }
+.faces button[aria-current="step"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.faces .lbl { font-size: 13px; }
+.mini { display: grid; grid-template-columns: repeat(3, 12px); gap: 2px; padding: 3px; border-radius: 4px; background: var(--plastic); }
+.mini i { width: 12px; height: 12px; border-radius: 2px; background: #3a3f48; }
+.tips { font-size: 13px; color: var(--muted); padding-left: 18px; margin: 0; display: grid; gap: 4px; }
+
+/* Net editor */
+.net-grid { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .net-grid { grid-template-columns: minmax(0, 1fr); } }
+.net-scroll { overflow-x: auto; }
+.net { --s: clamp(17px, 5vw, 30px); display: grid; grid-template-columns: repeat(4, auto); gap: 6px; width: max-content; }
+.face { display: grid; grid-template-columns: repeat(3, var(--s)); gap: 3px; padding: 4px; background: var(--plastic); border-radius: 6px; }
+.face[data-f="U"] { grid-column: 2; grid-row: 1; }
+.face[data-f="L"] { grid-column: 1; grid-row: 2; }
+.face[data-f="F"] { grid-column: 2; grid-row: 2; }
+.face[data-f="R"] { grid-column: 3; grid-row: 2; }
+.face[data-f="B"] { grid-column: 4; grid-row: 2; }
+.face[data-f="D"] { grid-column: 2; grid-row: 3; }
+.sticker { width: var(--s); height: var(--s); border-radius: 4px; border: 0; padding: 0; min-height: 0; cursor: pointer; }
+.sticker.center { cursor: default; position: relative; }
+.sticker.center::after { content: attr(data-l); position: absolute; inset: 0; display: grid; place-items: center; font: 700 11px var(--mono); color: rgba(0,0,0,.55); }
+.sticker.bad { outline: 3px solid var(--err); outline-offset: -3px; }
+.palette { display: flex; flex-wrap: wrap; gap: 8px; }
+.palette button { padding: 6px 10px 6px 6px; min-height: 0; font-weight: 500; font-size: 13px; }
+.palette .sw { width: 22px; height: 22px; border-radius: 5px; border: 2px solid var(--plastic); }
+.palette button[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.side { display: grid; gap: 14px; min-width: 0; }
+.status { border-radius: 10px; padding: 12px 14px; font-size: 14px; background: var(--sunken); border-left: 4px solid var(--muted); }
+.status[data-kind="ok"] { border-left-color: var(--ok); }
+.status[data-kind="err"] { border-left-color: var(--err); }
+.status ul { margin: 6px 0 0; padding-left: 18px; }
+.tag { font-family: var(--mono); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 3px 7px; border-radius: 5px; background: var(--sunken); color: var(--muted); }
+
+/* Solution player */
+.solve-grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 24px; align-items: center; }
+@media (max-width: 760px) { .solve-grid { grid-template-columns: minmax(0, 1fr); } }
+.stage { width: 100%; max-width: 340px; aspect-ratio: 1; display: grid; place-items: center; perspective: 900px; background: var(--sunken); border-radius: 12px; touch-action: none; cursor: grab; justify-self: center; }
+.cube3d { --c: 150px; width: var(--c); height: var(--c); position: relative; transform-style: preserve-3d; transition: transform .6s cubic-bezier(.3,.7,.2,1); }
+.cube3d.dragging { transition: none; }
+.f3 { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 5px; background: var(--plastic); border-radius: 8px; backface-visibility: hidden; }
+.f3 i { border-radius: 4px; transition: background-color .25s; }
+.f3[data-f="F"] { transform: translateZ(calc(var(--c) / 2)); }
+.f3[data-f="B"] { transform: rotateY(180deg) translateZ(calc(var(--c) / 2)); }
+.f3[data-f="R"] { transform: rotateY(90deg) translateZ(calc(var(--c) / 2)); }
+.f3[data-f="L"] { transform: rotateY(-90deg) translateZ(calc(var(--c) / 2)); }
+.f3[data-f="U"] { transform: rotateX(90deg) translateZ(calc(var(--c) / 2)); }
+.f3[data-f="D"] { transform: rotateX(-90deg) translateZ(calc(var(--c) / 2)); }
+.f3 svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity .3s; }
+.f3.turn svg { opacity: 1; }
+.f3.turn { box-shadow: 0 0 0 4px var(--accent); }
+.move-card { display: grid; gap: 12px; }
+.move-big { font-family: var(--mono); font-weight: 700; font-size: clamp(48px, 12vw, 76px); line-height: 1; }
+.move-desc { font-size: 18px; font-weight: 500; max-width: 40ch; }
+.counter { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.moves { display: flex; flex-wrap: wrap; gap: 6px; }
+.moves button { font-family: var(--mono); font-size: 14px; min-height: 0; padding: 5px 9px; border-radius: 6px; font-weight: 700; }
+.moves button.done { color: var(--muted); background: var(--sunken); }
+.moves button[aria-current="step"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.hold { font-size: 14px; background: var(--sunken); border-radius: 10px; padding: 12px 14px; }
+.hold b { font-weight: 600; }
+.legend { font-size: 13px; color: var(--muted); }
+.legend code { font-family: var(--mono); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .cube3d, .f3 i, .f3 svg { transition: none; } .chip .dot { animation: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Würfel-Scanner</h1>
+      <p class="lede">Scanne die sechs Seiten deines Zauberwürfels mit der Kamera. Die App erkennt die Farben, prüft den Würfel und zeigt dir die Lösung Zug für Zug, meist in unter 22 Zügen.</p>
+    </div>
+    <span class="chip" id="solverChip" data-state="loading"><span class="dot"></span><span id="solverText">Löser wird vorbereitet …</span></span>
+  </header>
+
+  <!-- 1 Scan -->
+  <section class="panel" aria-labelledby="h-scan">
+    <div class="panel-head">
+      <h2 id="h-scan"><span class="step-no">1</span>Seiten scannen</h2>
+      <button id="resetScan" type="button">Scan neu beginnen</button>
+    </div>
+    <div class="scan-grid">
+      <div>
+        <div class="viewer" id="viewer">
+          <canvas id="view" width="480" height="480" aria-label="Kamerabild mit Raster"></canvas>
+          <span class="badge" id="viewBadge">Keine Kamera</span>
+        </div>
+        <div class="controls">
+          <button class="primary" id="capture" type="button" disabled>Seite aufnehmen</button>
+          <button id="startCam" type="button">Live-Kamera starten</button>
+          <label class="btn" for="photo">Foto aufnehmen<input id="photo" type="file" accept="image/*" capture="environment"></label>
+        </div>
+        <div class="zoom" id="zoomRow" hidden>
+          <label for="zoom">Zoom</label><input id="zoom" type="range" min="1" max="4" step="0.01" value="1">
+          <span>Ziehen zum Verschieben</span>
+        </div>
+      </div>
+      <div class="side">
+        <div class="instr" aria-live="polite">
+          <span class="eyebrow" id="instrEyebrow">Seite 1 von 6</span>
+          <h3 id="instrTitle">Vorderseite</h3>
+          <p id="instrText"></p>
+          <p class="notice" id="camNotice" hidden></p>
+        </div>
+        <ul class="faces" id="faceList"></ul>
+        <ul class="tips">
+          <li>Gleichmäßiges Tageslicht, keine Spiegelungen auf den Stickern.</li>
+          <li>Den Würfel so halten, dass er das Raster genau ausfüllt.</li>
+          <li>Eine Seite falsch? Tippe sie oben an und scanne sie neu.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 Check -->
+  <section class="panel" aria-labelledby="h-net">
+    <div class="panel-head">
+      <h2 id="h-net"><span class="step-no">2</span>Prüfen und korrigieren</h2>
+      <span class="tag" id="sourceTag">Beispielwürfel</span>
+    </div>
+    <div class="net-grid">
+      <div class="net-scroll"><div class="net" id="net"></div></div>
+      <div class="side">
+        <p class="muted">Vergleiche das Netz mit deinem Würfel. Ist ein Feld falsch, wähle unten die richtige Farbe und tippe das Feld an. Die Mittelfelder legen die Farben fest und bleiben fix.</p>
+        <div class="palette" id="palette" role="group" aria-label="Farbe zum Korrigieren"></div>
+        <div class="status" id="status" aria-live="polite"></div>
+        <div><button class="primary" id="solveBtn" type="button" disabled>Lösung berechnen</button></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 Solve -->
+  <section class="panel" aria-labelledby="h-solve">
+    <div class="panel-head">
+      <h2 id="h-solve"><span class="step-no">3</span>Lösen</h2>
+      <span class="counter" id="solveCount"></span>
+    </div>
+    <div class="hold" id="holdHint"></div>
+    <div class="solve-grid">
+      <div class="stage" id="stage" aria-label="3D-Ansicht des Würfels, zum Drehen ziehen">
+        <div class="cube3d" id="cube3d"></div>
+      </div>
+      <div class="move-card">
+        <span class="counter" id="moveCounter">Noch keine Lösung</span>
+        <div class="move-big" id="moveBig">–</div>
+        <p class="move-desc" id="moveDesc">Scanne deinen Würfel oder probiere es mit dem Beispielwürfel: Klicke auf „Lösung berechnen“.</p>
+        <div class="controls">
+          <button id="prev" type="button" disabled>Zurück</button>
+          <button class="primary" id="next" type="button" disabled>Weiter</button>
+        </div>
+        <div class="moves" id="moves"></div>
+        <p class="legend">Schreibweise: <code>R</code> rechts, <code>L</code> links, <code>U</code> oben, <code>D</code> unten, <code>F</code> vorne, <code>B</code> hinten. Buchstabe allein heißt Vierteldrehung im Uhrzeigersinn, wenn du direkt auf diese Seite schaust. <code>'</code> heißt gegen den Uhrzeigersinn, <code>2</code> heißt halbe Drehung.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/cube.js"></script>
+<script>
+(() => {
+  "use strict";
+  const CUBE_URL = "https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/cube.js";
+  const SOLVE_URL = "https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/solve.js";
+
+  // ---------- Cube model ----------
+  // Facelet order follows Kociemba: U R F D L B, each face read row by row as seen from outside.
+  const FACES = ["U", "R", "F", "D", "L", "B"];
+  const SCAN_ORDER = ["F", "R", "B", "L", "U", "D"];
+  const FACE_DE = { U: "Oberseite", R: "Rechte Seite", F: "Vorderseite", D: "Unterseite", L: "Linke Seite", B: "Rückseite" };
+  const CANON = [
+    { name: "Weiß", hex: "#f2f3f5" },
+    { name: "Rot", hex: "#c8102e" },
+    { name: "Grün", hex: "#009b48" },
+    { name: "Gelb", hex: "#ffd500" },
+    { name: "Orange", hex: "#ff5800" },
+    { name: "Blau", hex: "#0046ad" },
+  ];
+  CANON.forEach(c => { c.lab = rgb2lab(hex2rgb(c.hex)); });
+  // Default colour scheme for the example: white top, green front, red right.
+  const DEFAULT_CLASS_COLOR = [0, 1, 2, 3, 4, 5];
+
+  const CF = [[8,9,20],[6,18,38],[0,36,47],[2,45,11],[29,26,15],[27,44,24],[33,53,42],[35,17,51]];
+  const CC = [[0,1,2],[0,2,4],[0,4,5],[0,5,1],[3,2,1],[3,4,2],[3,5,4],[3,1,5]];
+  const EF = [[5,10],[7,19],[3,37],[1,46],[32,16],[28,25],[30,43],[34,52],[23,12],[21,41],[50,39],[48,14]];
+  const EC = [[0,1],[0,2],[0,4],[0,5],[3,1],[3,2],[3,4],[3,5],[2,1],[2,4],[5,4],[5,1]];
+
+  const INSTR = {
+    F: "Wähle eine Seite als Vorderseite und halte sie gerade in die Kamera. Merke dir, welche Seite dabei oben ist. So hältst du den Würfel später auch beim Lösen.",
+    R: "Drehe den ganzen Würfel eine Vierteldrehung nach links, sodass die rechte Seite zur Kamera zeigt. Oben bleibt oben.",
+    B: "Noch eine Vierteldrehung nach links. Jetzt zeigt die Rückseite zur Kamera. Oben bleibt oben.",
+    L: "Noch eine Vierteldrehung nach links. Jetzt zeigt die linke Seite zur Kamera. Oben bleibt oben.",
+    U: "Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Oberseite zur Kamera zeigt. Die Vorderseite liegt jetzt unten im Bild.",
+    D: "Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Unterseite zur Kamera zeigt. Die Vorderseite liegt jetzt oben im Bild.",
+  };
+
+  let facelets = solvedFacelets();   // 54 class indices (class i = colour of centre of FACES[i])
+  let classColor = DEFAULT_CLASS_COLOR.slice();
+  let source = "example";            // "example" | "scan"
+  let scans = {};                    // face -> { lab: [9], rgb: [9] }
+  let currentFace = "F";
+  let paint = 0;
+  let solution = null;               // { moves: [], states: [] }
+  let step = 0;
+
+  function solvedFacelets() { const a = []; for (let i = 0; i < 54; i++) a.push(Math.floor(i / 9)); return a; }
+  function toString(fl) { return fl.map(c => FACES[c]).join(""); }
+  function fromString(s) { return s.split("").map(ch => FACES.indexOf(ch)); }
+  function colorOf(cls) { return CANON[classColor[cls]]; }
+
+  // ---------- Colour math ----------
+  function hex2rgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
+  function rgb2lab([r, g, b]) {
+    const lin = v => { v /= 255; return v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92; };
+    const R = lin(r), G = lin(g), B = lin(b);
+    let x = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047;
+    let y = (R * 0.2126 + G * 0.7152 + B * 0.0722);
+    let z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;
+    const f = t => t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116;
+    x = f(x); y = f(y); z = f(z);
+    return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+  }
+  function dist(a, b) { const dl = (a[0] - b[0]) * 0.6, da = a[1] - b[1], db = a[2] - b[2]; return Math.sqrt(dl * dl + da * da + db * db); }
+
+  // Hungarian algorithm (min-cost assignment), rows <= cols.
+  function hungarian(a) {
+    const n = a.length, m = a[0].length, INF = 1e18;
+    const u = new Float64Array(n + 1), v = new Float64Array(m + 1), p = new Int32Array(m + 1), way = new Int32Array(m + 1);
+    for (let i = 1; i <= n; i++) {
+      p[0] = i; let j0 = 0;
+      const minv = new Float64Array(m + 1).fill(INF), used = new Uint8Array(m + 1);
+      do {
+        used[j0] = 1; const i0 = p[j0]; let delta = INF, j1 = 0;
+        for (let j = 1; j <= m; j++) if (!used[j]) {
+          const cur = a[i0 - 1][j - 1] - u[i0] - v[j];
+          if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
+          if (minv[j] < delta) { delta = minv[j]; j1 = j; }
+        }
+        for (let j = 0; j <= m; j++) { if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta; }
+        j0 = j1;
+      } while (p[j0] !== 0);
+      do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
+    }
+    const ans = new Array(n);
+    for (let j = 1; j <= m; j++) if (p[j]) ans[p[j] - 1] = j - 1;
+    return ans;
+  }
+
+  // Assign all 54 stickers to the 6 centre colours, exactly 9 each, then refine with class means.
+  function classify() {
+    const samples = [];
+    FACES.forEach(f => scans[f].lab.forEach(l => samples.push(l)));
+    let refs = FACES.map((_, i) => samples[9 * i + 4]);
+    let result = null;
+    for (let iter = 0; iter < 3; iter++) {
+      const cost = samples.map((s, si) => {
+        const row = new Array(54);
+        for (let c = 0; c < 6; c++) {
+          const d = (si % 9 === 4) ? (Math.floor(si / 9) === c ? 0 : 1e6) : dist(s, refs[c]);
+          for (let k = 0; k < 9; k++) row[c * 9 + k] = d;
+        }
+        return row;
+      });
+      result = hungarian(cost).map(col => Math.floor(col / 9));
+      refs = FACES.map((_, c) => {
+        const mem = samples.filter((_, si) => result[si] === c);
+        const mean = [0, 0, 0]; mem.forEach(l => { mean[0] += l[0]; mean[1] += l[1]; mean[2] += l[2]; });
+        const centre = samples[9 * c + 4];
+        // Blend mean with the centre so a single odd sticker can't pull the reference away.
+        return mean.map((v, k) => 0.5 * (v / mem.length) + 0.5 * centre[k]);
+      });
+    }
+    facelets = result;
+    // Name the six colours: match centres to the canonical palette.
+    const cc = FACES.map((_, c) => CANON.map(k => dist(samples[9 * c + 4], k.lab)));
+    classColor = hungarian(cc);
+    source = "scan";
+  }
+
+  // ---------- Validation ----------
+  function validate(fl) {
+    const errors = [], bad = new Set();
+    const counts = [0, 0, 0, 0, 0, 0]; fl.forEach(c => counts[c]++);
+    const off = counts.map((n, c) => ({ n, c })).filter(x => x.n !== 9);
+    if (off.length) {
+      errors.push("Jede Farbe muss genau 9-mal vorkommen: " + off.map(x => `${colorOf(x.c).name} ${x.n}×`).join(", ") + ".");
+      return { ok: false, errors, bad };
+    }
+    const cp = [], co = [], ep = [], eo = [];
+    CF.forEach((pos, i) => {
+      const cols = pos.map(f => fl[f]);
+      const oris = [0, 1, 2].filter(k => cols[k] === 0 || cols[k] === 3);
+      let found = -1;
+      if (oris.length === 1) {
+        const o = oris[0];
+        found = CC.findIndex(c => c[0] === cols[o] && c[1] === cols[(o + 1) % 3] && c[2] === cols[(o + 2) % 3]);
+        co[i] = o;
+      }
+      if (found < 0) { pos.forEach(f => bad.add(f)); cp[i] = -1; } else cp[i] = found;
+    });
+    EF.forEach((pos, i) => {
+      const a = fl[pos[0]], b = fl[pos[1]];
+      let found = EC.findIndex(e => e[0] === a && e[1] === b);
+      if (found >= 0) eo[i] = 0;
+      else { found = EC.findIndex(e => e[0] === b && e[1] === a); eo[i] = 1; }
+      if (found < 0) { pos.forEach(f => bad.add(f)); ep[i] = -1; } else ep[i] = found;
+    });
+    if (bad.size) { errors.push("Einige Ecken oder Kanten haben eine Farbkombination, die es auf einem Würfel nicht gibt. Die markierten Felder prüfen."); return { ok: false, errors, bad }; }
+    const dupC = cp.filter((v, i) => cp.indexOf(v) !== i), dupE = ep.filter((v, i) => ep.indexOf(v) !== i);
+    if (dupC.length || dupE.length) {
+      CF.forEach((pos, i) => { if (dupC.includes(cp[i])) pos.forEach(f => bad.add(f)); });
+      EF.forEach((pos, i) => { if (dupE.includes(ep[i])) pos.forEach(f => bad.add(f)); });
+      errors.push("Ein Eck- oder Kantenstein kommt doppelt vor. Die markierten Felder prüfen.");
+      return { ok: false, errors, bad };
+    }
+    if (co.reduce((a, b) => a + b, 0) % 3) errors.push("Eine Ecke ist verdreht. Das passiert meist durch einen Scanfehler, selten durch einen umgebauten Würfel.");
+    if (eo.reduce((a, b) => a + b, 0) % 2) errors.push("Eine Kante ist gekippt. Prüfe die Kantenfelder oder scanne eine Seite neu.");
+    if (parity(cp) !== parity(ep)) errors.push("Zwei Steine sind vertauscht. Prüfe, ob du jede Seite in der richtigen Ausrichtung gescannt hast.");
+    return { ok: errors.length === 0, errors, bad };
+  }
+  function parity(p) { let s = 0; for (let i = 0; i < p.length; i++) for (let j = i + 1; j < p.length; j++) if (p[i] > p[j]) s++; return s % 2; }
+  function isSolved(fl) { return fl.every((c, i) => c === fl[9 * Math.floor(i / 9) + 4]); }
+
+  // ---------- Solver (Web Worker with main-thread fallback) ----------
+  const solver = { ready: false, worker: null, pending: null, mainThread: false };
+  const chip = document.getElementById("solverChip"), chipText = document.getElementById("solverText");
+  function setChip(state, text) { chip.dataset.state = state; chipText.textContent = text; }
+  function startSolver() {
+    try {
+      const src = `importScripts(${JSON.stringify(CUBE_URL)}, ${JSON.stringify(SOLVE_URL)});
+        Cube.initSolver(); postMessage({ type: "ready" });
+        onmessage = e => { try { postMessage({ type: "done", id: e.data.id, s: Cube.fromString(e.data.str).solve() }); }
+          catch (err) { postMessage({ type: "fail", id: e.data.id, msg: String(err) }); } };`;
+      const w = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+      solver.worker = w;
+      w.onmessage = e => {
+        const d = e.data;
+        if (d.type === "ready") { solver.ready = true; setChip("ready", "Löser bereit"); refreshSolveBtn(); }
+        else if (solver.pending && d.id === solver.pending.id) { const p = solver.pending; solver.pending = null; d.type === "done" ? p.resolve(d.s) : p.reject(new Error(d.msg)); }
+      };
+      w.onerror = ev => { ev.preventDefault?.(); if (!solver.ready) fallbackMain(); };
+    } catch (e) { fallbackMain(); }
+  }
+  function fallbackMain() {
+    if (solver.mainThread) return;
+    solver.mainThread = true; solver.worker = null;
+    setChip("loading", "Löser wird vorbereitet (kann kurz ruckeln) …");
+    const s = document.createElement("script"); s.src = SOLVE_URL;
+    s.onload = () => setTimeout(() => {
+      try { Cube.initSolver(); solver.ready = true; setChip("ready", "Löser bereit"); refreshSolveBtn(); }
+      catch (e) { setChip("error", "Löser konnte nicht starten"); }
+    }, 60);
+    s.onerror = () => setChip("error", "Löser nicht erreichbar. Internetverbindung prüfen.");
+    document.head.appendChild(s);
+  }
+  function solveString(str) {
+    if (solver.mainThread) return new Promise((res, rej) => setTimeout(() => { try { res(Cube.fromString(str).solve()); } catch (e) { rej(e); } }, 30));
+    return new Promise((resolve, reject) => {
+      const id = Date.now();
+      solver.pending = { id, resolve, reject };
+      solver.worker.postMessage({ id, str });
+      setTimeout(() => { if (solver.pending && solver.pending.id === id) { solver.pending = null; reject(new Error("timeout")); } }, 30000);
+    });
+  }
+
+  // ---------- Camera / photo ----------
+  const view = document.getElementById("view"), vctx = view.getContext("2d");
+  const work = document.createElement("canvas"); work.width = work.height = 480;
+  const wctx = work.getContext("2d", { willReadFrequently: true });
+  const badge = document.getElementById("viewBadge");
+  const camNotice = document.getElementById("camNotice");
+  const captureBtn = document.getElementById("capture");
+  const zoomRow = document.getElementById("zoomRow"), zoomEl = document.getElementById("zoom");
+  let video = null, stream = null, photo = null, live = [], frame = 0;
+  const GRID_MARGIN = 0.14;
+
+  async function startCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return camFail();
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+      video = document.createElement("video");
+      video.playsInline = true; video.muted = true; video.srcObject = stream;
+      await video.play();
+      photo = null; zoomRow.hidden = true; camNotice.hidden = true;
+      badge.textContent = "Live";
+      captureBtn.disabled = false;
+      document.getElementById("startCam").textContent = "Kamera stoppen";
+    } catch (e) { camFail(); }
+  }
+  function stopCamera() {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = null; video = null;
+    document.getElementById("startCam").textContent = "Live-Kamera starten";
+    if (!photo) { badge.textContent = "Keine Kamera"; captureBtn.disabled = true; }
+  }
+  function camFail() {
+    camNotice.hidden = false;
+    camNotice.textContent = "Die Live-Kamera ist hier nicht verfügbar. Tippe auf „Foto aufnehmen“: Auf dem Handy öffnet sich die Kamera, am Computer kannst du ein Foto auswählen.";
+  }
+  document.getElementById("startCam").addEventListener("click", () => stream ? stopCamera() : startCamera());
+
+  document.getElementById("photo").addEventListener("change", e => {
+    const file = e.target.files && e.target.files[0]; if (!file) return;
+    const img = new Image();
+    img.onload = () => {
+      stopCamera();
+      photo = { img, zoom: 1, ox: 0, oy: 0 };
+      zoomEl.value = 1; zoomRow.hidden = false;
+      badge.textContent = "Foto · " + FACE_DE[currentFace];
+      captureBtn.disabled = false;
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(file);
+    e.target.value = "";
+  });
+  zoomEl.addEventListener("input", () => { if (photo) photo.zoom = +zoomEl.value; });
+
+  // Drag to pan the photo.
+  let drag = null;
+  view.addEventListener("pointerdown", e => { if (!photo) return; drag = { x: e.clientX, y: e.clientY }; view.setPointerCapture(e.pointerId); });
+  view.addEventListener("pointermove", e => {
+    if (!drag || !photo) return;
+    const s = Math.min(photo.img.width, photo.img.height) / photo.zoom;
+    const k = s / view.getBoundingClientRect().width;
+    photo.ox -= (e.clientX - drag.x) * k; photo.oy -= (e.clientY - drag.y) * k;
+    drag = { x: e.clientX, y: e.clientY };
+  });
+  view.addEventListener("pointerup", () => { drag = null; });
+  view.addEventListener("pointercancel", () => { drag = null; });
+
+  function drawSource() {
+    const S = work.width;
+    if (video && video.readyState >= 2) {
+      const vw = video.videoWidth, vh = video.videoHeight, s = Math.min(vw, vh);
+      wctx.drawImage(video, (vw - s) / 2, (vh - s) / 2, s, s, 0, 0, S, S);
+      return true;
+    }
+    if (photo) {
+      const { img } = photo, s = Math.min(img.width, img.height) / photo.zoom;
+      photo.ox = Math.max(-(img.width - s) / 2, Math.min((img.width - s) / 2, photo.ox));
+      photo.oy = Math.max(-(img.height - s) / 2, Math.min((img.height - s) / 2, photo.oy));
+      wctx.drawImage(img, (img.width - s) / 2 + photo.ox, (img.height - s) / 2 + photo.oy, s, s, 0, 0, S, S);
+      return true;
+    }
+    return false;
+  }
+  function sampleWork() {
+    const S = work.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3, box = Math.round(cell * 0.4);
+    const rgb = [];
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+      const x = Math.round(m + c * cell + (cell - box) / 2), y = Math.round(m + r * cell + (cell - box) / 2);
+      const d = wctx.getImageData(x, y, box, box).data;
+      const R = [], G = [], B = [];
+      for (let i = 0; i < d.length; i += 4) { R.push(d[i]); G.push(d[i + 1]); B.push(d[i + 2]); }
+      const med = a => { a.sort((p, q) => p - q); return a[a.length >> 1]; };
+      rgb.push([med(R), med(G), med(B)]);
+    }
+    return { rgb, lab: rgb.map(rgb2lab) };
+  }
+  function render() {
+    const S = view.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3;
+    const has = drawSource();
+    if (has) {
+      vctx.drawImage(work, 0, 0);
+      if (frame++ % 6 === 0) live = sampleWork().rgb;
+      vctx.fillStyle = "rgba(0,0,0,0.35)";
+      vctx.fillRect(0, 0, S, m); vctx.fillRect(0, S - m, S, m); vctx.fillRect(0, m, m, S - 2 * m); vctx.fillRect(S - m, m, m, S - 2 * m);
+    } else {
+      vctx.fillStyle = "#16181d"; vctx.fillRect(0, 0, S, S);
+      vctx.fillStyle = "#8a93a0"; vctx.font = "600 18px 'IBM Plex Sans', sans-serif"; vctx.textAlign = "center";
+      vctx.fillText("Kamera starten oder Foto aufnehmen", S / 2, S - m / 2 + 6);
+      live = [];
+    }
+    vctx.strokeStyle = "rgba(255,255,255,0.9)"; vctx.lineWidth = 3;
+    for (let i = 0; i <= 3; i++) {
+      vctx.beginPath(); vctx.moveTo(m + i * cell, m); vctx.lineTo(m + i * cell, S - m); vctx.stroke();
+      vctx.beginPath(); vctx.moveTo(m, m + i * cell); vctx.lineTo(S - m, m + i * cell); vctx.stroke();
+    }
+    if (live.length) live.forEach((c, i) => {
+      const x = m + (i % 3) * cell + cell - 26, y = m + Math.floor(i / 3) * cell + 8;
+      vctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; vctx.fillRect(x, y, 18, 18);
+      vctx.strokeStyle = "#fff"; vctx.lineWidth = 2; vctx.strokeRect(x, y, 18, 18);
+    });
+    requestAnimationFrame(render);
+  }
+
+  captureBtn.addEventListener("click", () => {
+    if (!drawSource()) return;
+    scans[currentFace] = sampleWork();
+    const next = SCAN_ORDER.find(f => !scans[f]);
+    if (next) currentFace = next;
+    if (photo && next) { photo = null; zoomRow.hidden = true; captureBtn.disabled = true; badge.textContent = "Nächstes Foto aufnehmen"; }
+    if (SCAN_ORDER.every(f => scans[f])) {
+      classify(); clearSolution(); renderNet();
+      if (!next) { stopCamera(); photo = null; zoomRow.hidden = true; captureBtn.disabled = true; badge.textContent = "Alle Seiten gescannt"; }
+      document.getElementById("h-net").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    renderScanUI();
+  });
+  document.getElementById("resetScan").addEventListener("click", () => {
+    scans = {}; currentFace = "F"; renderScanUI();
+    if (photo) badge.textContent = "Foto · " + FACE_DE[currentFace];
+  });
+
+  function renderScanUI() {
+    const idx = SCAN_ORDER.indexOf(currentFace);
+    document.getElementById("instrEyebrow").textContent = `Seite ${idx + 1} von 6`;
+    document.getElementById("instrTitle").textContent = FACE_DE[currentFace];
+    document.getElementById("instrText").textContent = INSTR[currentFace];
+    const list = document.getElementById("faceList"); list.innerHTML = "";
+    SCAN_ORDER.forEach((f, i) => {
+      const li = document.createElement("li"), b = document.createElement("button");
+      b.type = "button"; if (f === currentFace) b.setAttribute("aria-current", "step");
+      const mini = document.createElement("span"); mini.className = "mini";
+      for (let k = 0; k < 9; k++) { const t = document.createElement("i"); if (scans[f]) { const c = scans[f].rgb[k]; t.style.background = `rgb(${c[0]},${c[1]},${c[2]})`; } mini.appendChild(t); }
+      const l = document.createElement("span"); l.className = "lbl"; l.textContent = `${i + 1}. ${FACE_DE[f]}${scans[f] ? " ✓" : ""}`;
+      b.append(mini, l);
+      b.addEventListener("click", () => { currentFace = f; renderScanUI(); if (photo) badge.textContent = "Foto · " + FACE_DE[f]; });
+      li.appendChild(b); list.appendChild(li);
+    });
+  }
+
+  // ---------- Net editor ----------
+  const netEl = document.getElementById("net"), statusEl = document.getElementById("status"), solveBtn = document.getElementById("solveBtn");
+  let lastCheck = { ok: false };
+  function renderPalette() {
+    const pal = document.getElementById("palette"); pal.innerHTML = "";
+    FACES.forEach((_, c) => {
+      const b = document.createElement("button"); b.type = "button";
+      b.setAttribute("aria-pressed", String(paint === c));
+      const sw = document.createElement("span"); sw.className = "sw"; sw.style.background = colorOf(c).hex;
+      b.append(sw, document.createTextNode(colorOf(c).name));
+      b.addEventListener("click", () => { paint = c; renderPalette(); });
+      pal.appendChild(b);
+    });
+  }
+  function renderNet() {
+    lastCheck = validate(facelets);
+    netEl.innerHTML = "";
+    FACES.forEach((f, fi) => {
+      const face = document.createElement("div"); face.className = "face"; face.dataset.f = f;
+      for (let k = 0; k < 9; k++) {
+        const i = fi * 9 + k, b = document.createElement("button");
+        b.type = "button"; b.className = "sticker" + (k === 4 ? " center" : "") + (lastCheck.bad.has(i) ? " bad" : "");
+        b.style.background = colorOf(facelets[i]).hex;
+        b.setAttribute("aria-label", `${FACE_DE[f]}, Feld ${k + 1}: ${colorOf(facelets[i]).name}`);
+        if (k === 4) { b.dataset.l = f; b.disabled = true; b.style.opacity = 1; }
+        else b.addEventListener("click", () => { facelets[i] = paint; clearSolution(); renderNet(); });
+        face.appendChild(b);
+      }
+      netEl.appendChild(face);
+    });
+    document.getElementById("sourceTag").textContent = source === "example" ? "Beispielwürfel" : "Dein Scan";
+    statusEl.innerHTML = "";
+    if (lastCheck.ok) {
+      statusEl.dataset.kind = "ok";
+      statusEl.textContent = isSolved(facelets) ? "Dieser Würfel ist bereits gelöst." : "Der Würfel ist gültig und kann gelöst werden.";
+    } else {
+      statusEl.dataset.kind = "err";
+      const p = document.createElement("strong"); p.textContent = "Das passt noch nicht:";
+      const ul = document.createElement("ul"); lastCheck.errors.forEach(t => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
+      statusEl.append(p, ul);
+    }
+    renderPalette(); refreshSolveBtn(); renderHold();
+    if (!solution) paintCube(facelets, null);
+  }
+  function refreshSolveBtn() {
+    solveBtn.disabled = !(lastCheck.ok && solver.ready && !isSolved(facelets));
+    solveBtn.textContent = solver.ready ? "Lösung berechnen" : "Löser wird vorbereitet …";
+  }
+  function renderHold() {
+    const front = colorOf(2).name, top = colorOf(0).name;
+    document.getElementById("holdHint").innerHTML = "";
+    const t = document.createElement("span");
+    t.innerHTML = `So hältst du den Würfel während der ganzen Lösung: <b></b> Mitte zeigt zu dir, <b></b> Mitte zeigt nach oben. Nicht umgreifen, nur die angegebene Seite drehen.`;
+    t.querySelectorAll("b")[0].textContent = front; t.querySelectorAll("b")[1].textContent = top;
+    document.getElementById("holdHint").appendChild(t);
+  }
+
+  solveBtn.addEventListener("click", async () => {
+    if (!lastCheck.ok || !solver.ready) return;
+    solveBtn.disabled = true; solveBtn.textContent = "Rechne …";
+    const str = toString(facelets);
+    try {
+      const sol = (await solveString(str)).trim();
+      const moves = sol ? sol.split(/\s+/) : [];
+      const states = [facelets.slice()];
+      const c = Cube.fromString(str);
+      moves.forEach(mv => { c.move(mv); states.push(fromString(c.asString())); });
+      solution = { moves, states }; step = 0;
+      renderSolution();
+      document.getElementById("h-solve").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) {
+      statusEl.dataset.kind = "err";
+      statusEl.textContent = "Die Lösung konnte nicht berechnet werden. Prüfe den Scan und versuche es noch einmal.";
+    }
+    refreshSolveBtn();
+  });
+
+  // ---------- Solution player ----------
+  const DIR = {
+    U: ["nach links", "nach rechts"], D: ["nach rechts", "nach links"],
+    R: ["nach oben", "nach unten"], L: ["nach unten", "nach oben"],
+    F: ["im Uhrzeigersinn", "gegen den Uhrzeigersinn"],
+    B: ["von vorne gesehen gegen den Uhrzeigersinn", "von vorne gesehen im Uhrzeigersinn"],
+  };
+  const LAYER = { U: "Obere Ebene", D: "Untere Ebene", R: "Rechte Seite", L: "Linke Seite", F: "Vorderseite", B: "Rückseite" };
+  function describe(mv) {
+    const f = mv[0], mod = mv.slice(1);
+    if (mod === "2") return `${LAYER[f]} eine halbe Drehung (180°) drehen. Die Richtung ist egal.`;
+    return `${LAYER[f]} eine Vierteldrehung ${DIR[f][mod === "'" ? 1 : 0]} drehen.`;
+  }
+  function clearSolution() { solution = null; step = 0; renderSolution(); }
+  function renderSolution() {
+    const big = document.getElementById("moveBig"), desc = document.getElementById("moveDesc");
+    const counter = document.getElementById("moveCounter"), list = document.getElementById("moves");
+    const prev = document.getElementById("prev"), next = document.getElementById("next");
+    list.innerHTML = "";
+    if (!solution) {
+      big.textContent = "–"; counter.textContent = "Noch keine Lösung";
+      desc.textContent = "Scanne deinen Würfel oder probiere es mit dem Beispielwürfel: Klicke auf „Lösung berechnen“.";
+      document.getElementById("solveCount").textContent = "";
+      prev.disabled = next.disabled = true; paintCube(facelets, null); return;
+    }
+    const n = solution.moves.length;
+    document.getElementById("solveCount").textContent = `${n} Züge`;
+    solution.moves.forEach((mv, i) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = mv;
+      if (i < step) b.className = "done";
+      if (i === step) b.setAttribute("aria-current", "step");
+      b.addEventListener("click", () => { step = i; renderSolution(); });
+      list.appendChild(b);
+    });
+    if (step >= n) {
+      big.textContent = "✓"; counter.textContent = n ? `Alle ${n} Züge erledigt` : "";
+      desc.textContent = n ? "Fertig. Dein Würfel ist gelöst." : "Dieser Würfel ist bereits gelöst.";
+      paintCube(solution.states[n], null);
+    } else {
+      const mv = solution.moves[step];
+      big.textContent = mv; counter.textContent = `Zug ${step + 1} von ${n}`;
+      desc.textContent = describe(mv);
+      paintCube(solution.states[step], mv);
+    }
+    prev.disabled = step === 0; next.disabled = step >= n;
+    next.textContent = step === n - 1 ? "Letzter Zug erledigt" : "Weiter";
+  }
+  document.getElementById("prev").addEventListener("click", () => { if (solution && step > 0) { step--; renderSolution(); } });
+  document.getElementById("next").addEventListener("click", () => { if (solution && step < solution.moves.length) { step++; renderSolution(); } });
+  document.addEventListener("keydown", e => {
+    if (!solution || e.target.closest("input")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); document.getElementById("next").click(); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); document.getElementById("prev").click(); }
+  });
+
+  // ---------- 3D cube ----------
+  const cube3d = document.getElementById("cube3d"), stage = document.getElementById("stage");
+  const VIEWS = { F: [-24, -38], R: [-24, -38], U: [-24, -38], L: [-24, 38], B: [-24, 142], D: [24, -38] };
+  let rot = VIEWS.F.slice(), faceEls = {};
+  function arrowSvg() {
+    return `<svg viewBox="0 0 100 100" aria-hidden="true"><defs><marker id="ah-ID" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ffffff"/></marker></defs>
+      <path class="arc" d="" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" style="filter:drop-shadow(0 0 3px rgba(0,0,0,.8))"/></svg>`;
+  }
+  function buildCube() {
+    FACES.forEach(f => {
+      const el = document.createElement("div"); el.className = "f3"; el.dataset.f = f;
+      for (let k = 0; k < 9; k++) el.appendChild(document.createElement("i"));
+      el.insertAdjacentHTML("beforeend", arrowSvg().replace(/ID/g, f));
+      cube3d.appendChild(el); faceEls[f] = el;
+    });
+    applyRot();
+  }
+  function applyRot() { cube3d.style.transform = `rotateX(${rot[0]}deg) rotateY(${rot[1]}deg)`; }
+  function paintCube(fl, mv) {
+    FACES.forEach((f, fi) => {
+      const el = faceEls[f]; if (!el) return;
+      el.querySelectorAll("i").forEach((t, k) => { t.style.background = colorOf(fl[fi * 9 + k]).hex; });
+      el.classList.toggle("turn", !!mv && mv[0] === f);
+    });
+    if (mv) {
+      const f = mv[0], mod = mv.slice(1), el = faceEls[f], arc = el.querySelector(".arc");
+      // Arc around the face centre; clockwise as seen from outside that face.
+      const cw = mod !== "'", r = 30, a0 = -150, sweep = mod === "2" ? 300 : 240;
+      const p = deg => [50 + r * Math.cos(deg * Math.PI / 180), 50 + r * Math.sin(deg * Math.PI / 180)];
+      const s = cw ? p(a0) : p(a0 + sweep), e = cw ? p(a0 + sweep) : p(a0);
+      arc.setAttribute("d", `M${s[0].toFixed(1)},${s[1].toFixed(1)} A${r},${r} 0 1 ${cw ? 1 : 0} ${e[0].toFixed(1)},${e[1].toFixed(1)}`);
+      arc.setAttribute("marker-end", `url(#ah-${f})`);
+      if (mod === "2") arc.setAttribute("marker-start", `url(#ah-${f})`); else arc.removeAttribute("marker-start");
+      rot = VIEWS[f].slice(); applyRot();
+    }
+  }
+  let rdrag = null;
+  stage.addEventListener("pointerdown", e => { rdrag = { x: e.clientX, y: e.clientY }; stage.setPointerCapture(e.pointerId); cube3d.classList.add("dragging"); });
+  stage.addEventListener("pointermove", e => {
+    if (!rdrag) return;
+    rot[1] += (e.clientX - rdrag.x) * 0.5; rot[0] = Math.max(-80, Math.min(80, rot[0] - (e.clientY - rdrag.y) * 0.5));
+    rdrag = { x: e.clientX, y: e.clientY }; applyRot();
+  });
+  const endDrag = () => { rdrag = null; cube3d.classList.remove("dragging"); };
+  stage.addEventListener("pointerup", endDrag); stage.addEventListener("pointercancel", endDrag);
+  function sizeCube() { const w = stage.getBoundingClientRect().width; cube3d.style.setProperty("--c", Math.round(w * 0.44) + "px"); }
+  window.addEventListener("resize", sizeCube);
+
+  // ---------- Boot ----------
+  buildCube(); sizeCube();
+  if (window.Cube) {
+    const c = new Cube(); c.move("R U2 F' L D2 B R' U F2 D' L2 B2 U R2 F D L'");
+    facelets = fromString(c.asString());
+    startSolver();
+  } else {
+    setChip("error", "Löser nicht erreichbar. Internetverbindung prüfen.");
+  }
+  renderScanUI(); renderNet(); renderSolution();
+  requestAnimationFrame(render);
+})();
+</script>
+
+</body>
+</html>
