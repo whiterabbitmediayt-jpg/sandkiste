@@ -115,6 +115,15 @@ p.zoom { margin-top: 4px; }
 .faces .lbl { font-size: 13px; }
 .mini { display: grid; grid-template-columns: repeat(3, 12px); gap: 2px; padding: 3px; border-radius: 4px; background: var(--plastic); }
 .mini i { width: 12px; height: 12px; border-radius: 2px; background: #3a3f48; }
+.review { position: absolute; inset: 14%; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+.review button { background: transparent; border: 0; border-radius: 0; padding: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.review button:hover { background: rgba(255,255,255,.08); border: 0; }
+.review .swatch { width: 44%; aspect-ratio: 1; border-radius: 8px; border: 3px solid #ffffff; box-shadow: 0 2px 10px rgba(0,0,0,.55); }
+.review .changed .swatch { border-style: dashed; }
+.review .nm { font: 600 12px var(--body); color: #ffffff; background: rgba(0,0,0,.7); padding: 1px 6px; border-radius: 4px; white-space: nowrap; }
+.review-hint { flex-basis: 100%; font-size: 13px; color: var(--muted); }
+.linkish { background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-size: 13px; color: var(--accent); text-decoration: underline; cursor: pointer; font-weight: 500; }
+.linkish:hover { border: 0; }
 .tips { font-size: 13px; color: var(--muted); padding-left: 18px; margin: 0; display: grid; gap: 4px; }
 
 /* Net editor */
@@ -130,7 +139,7 @@ p.zoom { margin-top: 4px; }
 .face[data-f="B"] { grid-column: 4; grid-row: 2; }
 .face[data-f="D"] { grid-column: 2; grid-row: 3; }
 .sticker { width: var(--s); height: var(--s); border-radius: 4px; border: 0; padding: 0; min-height: 0; cursor: pointer; }
-.sticker.center { cursor: default; position: relative; }
+.sticker.center { position: relative; }
 .sticker.center::after { content: attr(data-l); position: absolute; inset: 0; display: grid; place-items: center; font: 700 11px var(--mono); color: rgba(0,0,0,.55); }
 .sticker.bad { outline: 3px solid var(--err); outline-offset: -3px; }
 .palette { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -196,8 +205,14 @@ p.zoom { margin-top: 4px; }
         <div class="viewer" id="viewer">
           <canvas id="view" width="960" height="960" aria-label="Kamerabild mit Raster"></canvas>
           <span class="badge" id="viewBadge">Keine Kamera</span>
+          <div class="review" id="review" hidden></div>
         </div>
-        <div class="controls">
+        <div class="controls" id="reviewBar" hidden>
+          <button class="primary" id="accept" type="button">Übernehmen</button>
+          <button id="retake" type="button">Nochmal aufnehmen</button>
+          <p class="review-hint">Feld anklicken wechselt zur nächstwahrscheinlichen Farbe. Leertaste übernimmt, Esc verwirft.</p>
+        </div>
+        <div class="controls" id="mainControls">
           <button class="primary" id="capture" type="button" disabled>Seite aufnehmen</button>
           <button id="startCam" type="button">Live-Kamera starten</button>
           <label class="btn" for="photo">Foto aufnehmen<input id="photo" type="file" accept="image/*" capture="environment"></label>
@@ -233,6 +248,7 @@ p.zoom { margin-top: 4px; }
           <li>Den Würfel so halten oder hinstellen, dass er das Raster genau ausfüllt. Mit Zoom und Verschieben passt du den Ausschnitt an.</li>
           <li>Leertaste nimmt die Seite auf, so bleiben beide Hände am Würfel.</li>
           <li>Eine Seite falsch? Tippe sie oben an und scanne sie neu.</li>
+          <li>Die App lernt aus deinen Korrekturen, wie die Farben bei deiner Kamera aussehen. <button type="button" class="linkish" id="resetColors">Gelernte Farben zurücksetzen</button></li>
         </ul>
       </div>
     </div>
@@ -247,7 +263,7 @@ p.zoom { margin-top: 4px; }
     <div class="net-grid">
       <div class="net-scroll"><div class="net" id="net"></div></div>
       <div class="side">
-        <p class="muted">Vergleiche das Netz mit deinem Würfel. Ist ein Feld falsch, wähle unten die richtige Farbe und tippe das Feld an. Die Mittelfelder legen die Farben fest und bleiben fix.</p>
+        <p class="muted">Vergleiche das Netz mit deinem Würfel. Ist ein Feld falsch, wähle unten die richtige Farbe und tippe das Feld an. Die Buchstaben markieren die Mittelfelder.</p>
         <div class="palette" id="palette" role="group" aria-label="Farbe zum Korrigieren"></div>
         <div class="status" id="status" aria-live="polite"></div>
         <div><button class="primary" id="solveBtn" type="button" disabled>Lösung berechnen</button></div>
@@ -302,8 +318,8 @@ p.zoom { margin-top: 4px; }
     { name: "Blau", hex: "#0046ad" },
   ];
   CANON.forEach(c => { c.lab = rgb2lab(hex2rgb(c.hex)); });
-  // Default colour scheme for the example: white top, green front, red right.
-  const DEFAULT_CLASS_COLOR = [0, 1, 2, 3, 4, 5];
+  // Example uses the standard scheme: white top, green front, red right.
+  const CENTER_IDX = [4, 13, 22, 31, 40, 49];
 
   const CF = [[8,9,20],[6,18,38],[0,36,47],[2,45,11],[29,26,15],[27,44,24],[33,53,42],[35,17,51]];
   const CC = [[0,1,2],[0,2,4],[0,4,5],[0,5,1],[3,2,1],[3,4,2],[3,5,4],[3,1,5]];
@@ -319,8 +335,7 @@ p.zoom { margin-top: 4px; }
     D: "Zurück zur Vorderseite. Kippe den Würfel dann so, dass die Unterseite zur Kamera zeigt. Die Vorderseite liegt jetzt oben im Bild.",
   };
 
-  let facelets = solvedFacelets();   // 54 class indices (class i = colour of centre of FACES[i])
-  let classColor = DEFAULT_CLASS_COLOR.slice();
+  let facelets = solvedFacelets();   // 54 colour labels (index into CANON), confirmed by the viewer
   let source = "example";            // "example" | "scan"
   let scans = {};                    // face -> { lab: [9], rgb: [9] }
   let currentFace = "F";
@@ -329,9 +344,11 @@ p.zoom { margin-top: 4px; }
   let step = 0;
 
   function solvedFacelets() { const a = []; for (let i = 0; i < 54; i++) a.push(Math.floor(i / 9)); return a; }
-  function toString(fl) { return fl.map(c => FACES[c]).join(""); }
-  function fromString(s) { return s.split("").map(ch => FACES.indexOf(ch)); }
-  function colorOf(cls) { return CANON[classColor[cls]]; }
+  function centersOf(fl) { return CENTER_IDX.map(i => fl[i]); }
+  // Cube string for the solver: each sticker named after the face whose centre has its colour.
+  function toString(fl) { const cc = centersOf(fl); return fl.map(c => FACES[cc.indexOf(c)]).join(""); }
+  function labelsFromString(s, cc) { return s.split("").map(ch => cc[FACES.indexOf(ch)]); }
+  function colorOf(c) { return CANON[c]; }
 
   // ---------- Colour math ----------
   function hex2rgb(h) { const n = parseInt(h.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; }
@@ -345,72 +362,62 @@ p.zoom { margin-top: 4px; }
     x = f(x); y = f(y); z = f(z);
     return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
   }
-  function dist(a, b) { const dl = (a[0] - b[0]) * 0.6, da = a[1] - b[1], db = a[2] - b[2]; return Math.sqrt(dl * dl + da * da + db * db); }
-
-  // Hungarian algorithm (min-cost assignment), rows <= cols.
-  function hungarian(a) {
-    const n = a.length, m = a[0].length, INF = 1e18;
-    const u = new Float64Array(n + 1), v = new Float64Array(m + 1), p = new Int32Array(m + 1), way = new Int32Array(m + 1);
-    for (let i = 1; i <= n; i++) {
-      p[0] = i; let j0 = 0;
-      const minv = new Float64Array(m + 1).fill(INF), used = new Uint8Array(m + 1);
-      do {
-        used[j0] = 1; const i0 = p[j0]; let delta = INF, j1 = 0;
-        for (let j = 1; j <= m; j++) if (!used[j]) {
-          const cur = a[i0 - 1][j - 1] - u[i0] - v[j];
-          if (cur < minv[j]) { minv[j] = cur; way[j] = j0; }
-          if (minv[j] < delta) { delta = minv[j]; j1 = j; }
-        }
-        for (let j = 0; j <= m; j++) { if (used[j]) { u[p[j]] += delta; v[j] -= delta; } else minv[j] -= delta; }
-        j0 = j1;
-      } while (p[j0] !== 0);
-      do { const j1 = way[j0]; p[j0] = p[j1]; j0 = j1; } while (j0);
-    }
-    const ans = new Array(n);
-    for (let j = 1; j <= m; j++) if (p[j]) ans[p[j] - 1] = j - 1;
-    return ans;
+  // Colour distance that weighs hue most: shadows change lightness and saturation, rarely the hue.
+  function dist(a, b) {
+    const dL = a[0] - b[0], C1 = Math.hypot(a[1], a[2]), C2 = Math.hypot(b[1], b[2]), dC = C1 - C2;
+    const dH2 = Math.max(0, (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2 - dC * dC);
+    return Math.sqrt((dL * 0.4) ** 2 + (dC * 0.5) ** 2 + dH2);
   }
 
-  // Assign all 54 stickers to the 6 centre colours, exactly 9 each, then refine with class means.
-  function classify() {
-    const samples = [];
-    FACES.forEach(f => scans[f].lab.forEach(l => samples.push(l)));
-    let refs = FACES.map((_, i) => samples[9 * i + 4]);
-    let result = null;
-    for (let iter = 0; iter < 3; iter++) {
-      const cost = samples.map((s, si) => {
-        const row = new Array(54);
-        for (let c = 0; c < 6; c++) {
-          const d = (si % 9 === 4) ? (Math.floor(si / 9) === c ? 0 : 1e6) : dist(s, refs[c]);
-          for (let k = 0; k < 9; k++) row[c * 9 + k] = d;
-        }
-        return row;
-      });
-      result = hungarian(cost).map(col => Math.floor(col / 9));
-      refs = FACES.map((_, c) => {
-        const mem = samples.filter((_, si) => result[si] === c);
-        const mean = [0, 0, 0]; mem.forEach(l => { mean[0] += l[0]; mean[1] += l[1]; mean[2] += l[2]; });
-        const centre = samples[9 * c + 4];
-        // Blend mean with the centre so a single odd sticker can't pull the reference away.
-        return mean.map((v, k) => 0.5 * (v / mem.length) + 0.5 * centre[k]);
-      });
-    }
-    facelets = result;
-    // Name the six colours: match centres to the canonical palette.
-    const cc = FACES.map((_, c) => CANON.map(k => dist(samples[9 * c + 4], k.lab)));
-    classColor = hungarian(cc);
-    source = "scan";
+  // ---------- Learned colour examples ----------
+  // Every confirmed sticker is kept as an example of its colour, so the app learns how this camera
+  // and this light show each colour. Ideal colours are the fallback until examples exist.
+  const REF_KEY = "wuerfel-scanner-farben-v2", MAX_EXAMPLES = 24;
+  let examples = [[], [], [], [], [], []];
+  try {
+    const r = JSON.parse(localStorage.getItem(REF_KEY));
+    if (r && Array.isArray(r.examples) && r.examples.length === 6) examples = r.examples;
+  } catch (e) {}
+  function saveRefs() { try { localStorage.setItem(REF_KEY, JSON.stringify({ examples })); } catch (e) {} }
+  function colorDist(lab, c) {
+    let d = dist(lab, CANON[c].lab) + 6;
+    for (const ex of examples[c]) d = Math.min(d, dist(lab, ex));
+    return d;
+  }
+  // First entry: the detected colour. The rest is the click order for corrections, sorted by plain
+  // Lab distance so that neighbours like yellow and orange or red and orange come one click apart.
+  function labDist(a, b) { const dl = (a[0] - b[0]) * 0.5; return Math.sqrt(dl * dl + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2); }
+  function rankColors(lab) {
+    const d = [0, 1, 2, 3, 4, 5].map(c => colorDist(lab, c));
+    const best = [0, 1, 2, 3, 4, 5].sort((a, b) => d[a] - d[b])[0];
+    const near = c => Math.min(labDist(lab, CANON[c].lab), ...examples[c].map(ex => labDist(lab, ex)));
+    return [best, ...[0, 1, 2, 3, 4, 5].filter(c => c !== best).sort((a, b) => near(a) - near(b))];
+  }
+  function learnFace(sample, labels) {
+    labels.forEach((c, k) => {
+      examples[c].push(sample.lab[k].map(v => Math.round(v * 10) / 10));
+      if (examples[c].length > MAX_EXAMPLES) examples[c].shift();
+    });
+    saveRefs();
   }
 
   // ---------- Validation ----------
-  function validate(fl) {
+  function validate(lab) {
     const errors = [], bad = new Set();
-    const counts = [0, 0, 0, 0, 0, 0]; fl.forEach(c => counts[c]++);
+    const centers = centersOf(lab);
+    const dupCenters = centers.filter((c, i) => centers.indexOf(c) !== i);
+    if (dupCenters.length) {
+      CENTER_IDX.forEach(i => { if (dupCenters.includes(lab[i])) bad.add(i); });
+      errors.push("Zwei Mittelfelder haben dieselbe Farbe (" + [...new Set(dupCenters)].map(c => colorOf(c).name).join(", ") + "). Jede Seite hat eine andere Mittelfarbe. Korrigiere das Mittelfeld oder scanne die Seite neu.");
+      return { ok: false, errors, bad };
+    }
+    const counts = [0, 0, 0, 0, 0, 0]; lab.forEach(c => counts[c]++);
     const off = counts.map((n, c) => ({ n, c })).filter(x => x.n !== 9);
     if (off.length) {
       errors.push("Jede Farbe muss genau 9-mal vorkommen: " + off.map(x => `${colorOf(x.c).name} ${x.n}×`).join(", ") + ".");
       return { ok: false, errors, bad };
     }
+    const fl = lab.map(c => centers.indexOf(c));   // colour labels -> face classes
     const cp = [], co = [], ep = [], eo = [];
     CF.forEach((pos, i) => {
       const cols = pos.map(f => fl[f]);
@@ -723,6 +730,7 @@ p.zoom { margin-top: 4px; }
     return { rgb, lab: rgb.map(rgb2lab) };
   }
   function render() {
+    if (review) { requestAnimationFrame(render); return; }
     const S = view.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3, u = S / 480;
     const cs = currentSource();
     if (cs) {
@@ -751,26 +759,71 @@ p.zoom { margin-top: 4px; }
     requestAnimationFrame(render);
   }
 
+  // Capture freezes the frame and shows the detected colours for checking before anything is saved.
+  let review = null;
+  const reviewEl = document.getElementById("review"), reviewBar = document.getElementById("reviewBar"), mainControls = document.getElementById("mainControls");
   captureBtn.addEventListener("click", () => {
-    if (!drawSource()) return;
-    scans[currentFace] = sampleWork();
+    if (review || !drawSource()) return;
+    const sample = sampleWork(), ranks = sample.lab.map(rankColors);
+    review = { face: currentFace, sample, ranks, labels: ranks.map(r => r[0]), flip: !!(video && mirror) };
+    reviewBar.hidden = false; mainControls.hidden = true;
+    badge.textContent = "Prüfen · " + FACE_DE[currentFace];
+    renderReview();
+  });
+  function renderReview() {
+    reviewEl.innerHTML = ""; reviewEl.hidden = !review;
+    if (!review) return;
+    for (let r = 0; r < 3; r++) for (let dc = 0; dc < 3; dc++) {
+      const k = r * 3 + (review.flip ? 2 - dc : dc), c = review.labels[k];
+      const b = document.createElement("button"); b.type = "button";
+      if (c !== review.ranks[k][0]) b.className = "changed";
+      const sw = document.createElement("span"); sw.className = "swatch"; sw.style.background = CANON[c].hex;
+      const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = CANON[c].name;
+      b.setAttribute("aria-label", `Feld ${k + 1}: ${CANON[c].name}. Anklicken für die nächste Farbe`);
+      b.append(sw, nm);
+      b.addEventListener("click", () => {
+        const rk = review.ranks[k];
+        review.labels[k] = rk[(rk.indexOf(review.labels[k]) + 1) % 6];
+        renderReview();
+      });
+      reviewEl.appendChild(b);
+    }
+  }
+  function endReview() { review = null; renderReview(); reviewBar.hidden = true; mainControls.hidden = false; if (video) updateBadge(); }
+  document.getElementById("retake").addEventListener("click", () => { endReview(); if (photo) badge.textContent = "Foto · " + FACE_DE[currentFace]; });
+  document.getElementById("accept").addEventListener("click", () => {
+    if (!review) return;
+    scans[review.face] = { rgb: review.sample.rgb, lab: review.sample.lab, labels: review.labels.slice() };
+    learnFace(review.sample, review.labels);
+    endReview();
     const next = SCAN_ORDER.find(f => !scans[f]);
     if (next) currentFace = next;
     if (photo && next) { photo = null; showZoom(false); captureBtn.disabled = true; badge.textContent = "Nächstes Foto aufnehmen"; }
     if (SCAN_ORDER.every(f => scans[f])) {
-      classify(); clearSolution(); renderNet();
+      facelets = []; FACES.forEach(f => scans[f].labels.forEach(c => facelets.push(c)));
+      source = "scan"; clearSolution(); renderNet();
       if (!next) { photo = null; stopCamera(); showZoom(false); captureBtn.disabled = true; badge.textContent = "Alle Seiten gescannt"; }
       document.getElementById("h-net").scrollIntoView({ behavior: "smooth", block: "start" });
     }
     renderScanUI();
   });
-  // Space bar captures, so the cube can be turned with both hands and shot without the mouse.
+  // Space bar captures and confirms, so the cube can be turned with both hands without the mouse.
   document.addEventListener("keydown", e => {
+    if (review) {
+      if (e.key === " " && !e.repeat) { e.preventDefault(); document.getElementById("accept").click(); }
+      else if (e.key === "Escape") { e.preventDefault(); document.getElementById("retake").click(); }
+      return;
+    }
     if (e.key !== " " || e.repeat || captureBtn.disabled) return;
     if (e.target.closest("button, input, select, textarea, label")) return;
     e.preventDefault(); captureBtn.click();
   });
+  document.getElementById("resetColors").addEventListener("click", e => {
+    examples = [[], [], [], [], [], []]; saveRefs();
+    e.target.textContent = "Zurückgesetzt";
+  });
   document.getElementById("resetScan").addEventListener("click", () => {
+    if (review) endReview();
     scans = {}; currentFace = "F"; renderScanUI();
     if (photo) badge.textContent = "Foto · " + FACE_DE[currentFace];
   });
@@ -785,10 +838,10 @@ p.zoom { margin-top: 4px; }
       const li = document.createElement("li"), b = document.createElement("button");
       b.type = "button"; if (f === currentFace) b.setAttribute("aria-current", "step");
       const mini = document.createElement("span"); mini.className = "mini";
-      for (let k = 0; k < 9; k++) { const t = document.createElement("i"); if (scans[f]) { const c = scans[f].rgb[k]; t.style.background = `rgb(${c[0]},${c[1]},${c[2]})`; } mini.appendChild(t); }
+      for (let k = 0; k < 9; k++) { const t = document.createElement("i"); if (scans[f]) t.style.background = CANON[scans[f].labels[k]].hex; mini.appendChild(t); }
       const l = document.createElement("span"); l.className = "lbl"; l.textContent = `${i + 1}. ${FACE_DE[f]}${scans[f] ? " ✓" : ""}`;
       b.append(mini, l);
-      b.addEventListener("click", () => { currentFace = f; renderScanUI(); if (photo) badge.textContent = "Foto · " + FACE_DE[f]; });
+      b.addEventListener("click", () => { if (review) endReview(); currentFace = f; renderScanUI(); if (photo) badge.textContent = "Foto · " + FACE_DE[f]; });
       li.appendChild(b); list.appendChild(li);
     });
   }
@@ -817,8 +870,8 @@ p.zoom { margin-top: 4px; }
         b.type = "button"; b.className = "sticker" + (k === 4 ? " center" : "") + (lastCheck.bad.has(i) ? " bad" : "");
         b.style.background = colorOf(facelets[i]).hex;
         b.setAttribute("aria-label", `${FACE_DE[f]}, Feld ${k + 1}: ${colorOf(facelets[i]).name}`);
-        if (k === 4) { b.dataset.l = f; b.disabled = true; b.style.opacity = 1; }
-        else b.addEventListener("click", () => { facelets[i] = paint; clearSolution(); renderNet(); });
+        if (k === 4) b.dataset.l = f;
+        b.addEventListener("click", () => { facelets[i] = paint; clearSolution(); renderNet(); });
         face.appendChild(b);
       }
       netEl.appendChild(face);
@@ -842,7 +895,7 @@ p.zoom { margin-top: 4px; }
     solveBtn.textContent = solver.ready ? "Lösung berechnen" : "Löser wird vorbereitet …";
   }
   function renderHold() {
-    const front = colorOf(2).name, top = colorOf(0).name;
+    const front = colorOf(facelets[22]).name, top = colorOf(facelets[4]).name;
     document.getElementById("holdHint").innerHTML = "";
     const t = document.createElement("span");
     t.innerHTML = `So hältst du den Würfel während der ganzen Lösung: <b></b> Mitte zeigt zu dir, <b></b> Mitte zeigt nach oben. Nicht umgreifen, nur die angegebene Seite drehen.`;
@@ -858,8 +911,8 @@ p.zoom { margin-top: 4px; }
       const sol = (await solveString(str)).trim();
       const moves = sol ? sol.split(/\s+/) : [];
       const states = [facelets.slice()];
-      const c = Cube.fromString(str);
-      moves.forEach(mv => { c.move(mv); states.push(fromString(c.asString())); });
+      const c = Cube.fromString(str), cc = centersOf(facelets);
+      moves.forEach(mv => { c.move(mv); states.push(labelsFromString(c.asString(), cc)); });
       solution = { moves, states }; step = 0;
       renderSolution();
       document.getElementById("h-solve").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -977,7 +1030,7 @@ p.zoom { margin-top: 4px; }
   buildCube(); sizeCube();
   if (window.Cube) {
     const c = new Cube(); c.move("R U2 F' L D2 B R' U F2 D' L2 B2 U R2 F D L'");
-    facelets = fromString(c.asString());
+    facelets = labelsFromString(c.asString(), [0, 1, 2, 3, 4, 5]);
     startSolver();
   } else {
     setChip("error", "Löser nicht erreichbar. Internetverbindung prüfen.");
