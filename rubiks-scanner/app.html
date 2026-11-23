@@ -200,7 +200,7 @@ p.zoom { margin-top: 4px; display: block; }
 .f3[data-f="U"] { transform: rotateX(90deg) translateZ(calc(var(--c) / 2)); }
 .f3[data-f="D"] { transform: rotateX(-90deg) translateZ(calc(var(--c) / 2)); }
 .f3 svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; transition: opacity .3s; }
-.f3.turn svg { opacity: 1; }
+.f3.arrow svg { opacity: 1; }
 .f3.turn { box-shadow: 0 0 0 4px var(--accent); }
 .move-card { display: grid; gap: 12px; }
 .move-big { font-family: var(--display); font-weight: 700; font-size: clamp(40px, 10vw, 64px); line-height: 1; }
@@ -1332,22 +1332,44 @@ p.zoom { margin-top: 4px; display: block; }
     applyRot();
   }
   function applyRot() { cube3d.style.transform = `rotateX(${rot[0]}deg) rotateY(${rot[1]}deg)`; }
+  // Straight arrows on the front face for the layers next to it, in the same words as the text
+  // ("Oben ←" = the top row of the front face moves left). [x1, y1, x2, y2] for a clockwise turn.
+  const FRONT_ARROW = {
+    U: [86, 20, 14, 20],   // top row to the left
+    D: [14, 80, 86, 80],   // bottom row to the right
+    R: [80, 86, 80, 14],   // right column up
+    L: [20, 14, 20, 86],   // left column down
+  };
   function paintCube(fl, mv) {
     FACES.forEach((f, fi) => {
       const el = faceEls[f]; if (!el) return;
       el.querySelectorAll("i").forEach((t, k) => { t.style.background = colorOf(fl[fi * 9 + k]).hex; });
       el.classList.toggle("turn", !!mv && mv[0] === f);
+      el.classList.remove("arrow");
     });
     if (mv) {
-      const f = mv[0], mod = mv.slice(1), el = faceEls[f], arc = el.querySelector(".arc");
-      // Arc around the face centre; clockwise as seen from outside that face.
-      const cw = mod !== "'", r = 30, a0 = -150, sweep = mod === "2" ? 300 : 240;
-      const p = deg => [50 + r * Math.cos(deg * Math.PI / 180), 50 + r * Math.sin(deg * Math.PI / 180)];
-      const s = cw ? p(a0) : p(a0 + sweep), e = cw ? p(a0 + sweep) : p(a0);
-      arc.setAttribute("d", `M${s[0].toFixed(1)},${s[1].toFixed(1)} A${r},${r} 0 1 ${cw ? 1 : 0} ${e[0].toFixed(1)},${e[1].toFixed(1)}`);
-      arc.setAttribute("marker-end", `url(#ah-${f})`);
-      if (mod === "2") arc.setAttribute("marker-start", `url(#ah-${f})`); else arc.removeAttribute("marker-start");
-      rot = VIEWS[f].slice(); applyRot();
+      const f = mv[0], mod = mv.slice(1);
+      if (FRONT_ARROW[f]) {
+        const el = faceEls.F, path = el.querySelector(".arc");
+        let [x1, y1, x2, y2] = FRONT_ARROW[f];
+        if (mod === "'") [x1, y1, x2, y2] = [x2, y2, x1, y1];
+        path.setAttribute("d", `M${x1},${y1} L${x2},${y2}`);
+        path.setAttribute("marker-end", "url(#ah-F)");
+        if (mod === "2") path.setAttribute("marker-start", "url(#ah-F)"); else path.removeAttribute("marker-start");
+        el.classList.add("arrow");
+        rot = VIEWS.F.slice(); applyRot();
+      } else {
+        // Front and back: round arrow on that face, clockwise as seen from outside it.
+        const el = faceEls[f], arc = el.querySelector(".arc");
+        const cw = mod !== "'", r = 30, a0 = -150, sweep = mod === "2" ? 300 : 240;
+        const p = deg => [50 + r * Math.cos(deg * Math.PI / 180), 50 + r * Math.sin(deg * Math.PI / 180)];
+        const s = cw ? p(a0) : p(a0 + sweep), e = cw ? p(a0 + sweep) : p(a0);
+        arc.setAttribute("d", `M${s[0].toFixed(1)},${s[1].toFixed(1)} A${r},${r} 0 1 ${cw ? 1 : 0} ${e[0].toFixed(1)},${e[1].toFixed(1)}`);
+        arc.setAttribute("marker-end", `url(#ah-${f})`);
+        if (mod === "2") arc.setAttribute("marker-start", `url(#ah-${f})`); else arc.removeAttribute("marker-start");
+        el.classList.add("arrow");
+        rot = VIEWS[f].slice(); applyRot();
+      }
     }
   }
   let rdrag = null;
