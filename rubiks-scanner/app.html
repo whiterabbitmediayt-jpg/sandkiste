@@ -110,13 +110,14 @@ p.zoom { margin-top: 4px; display: block; }
 
 .instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .instr-text { display: grid; gap: 8px; min-width: 0; }
-.turn-guide { width: 120px; height: 120px; perspective: 600px; }
-@media (max-width: 420px) { .turn-guide { width: 92px; height: 92px; } .tg-cube { --c: 44px !important; } }
+.turn-guide { width: 190px; height: 190px; perspective: 800px; }
 .tg-flip, .tg-view { width: 100%; height: 100%; display: grid; place-items: center; transform-style: preserve-3d; }
 .tg-view { transform: rotateX(-20deg) rotateY(-28deg); }
-.tg-cube { --c: 56px; width: var(--c); height: var(--c); position: relative; transform-style: preserve-3d; }
-.tg-f { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; background: var(--plastic); border-radius: 5px; backface-visibility: hidden; }
-.tg-f i { border-radius: 2px; background: #6b717c; }
+.tg-cube { --c: 92px; width: var(--c); height: var(--c); position: relative; transform-style: preserve-3d; }
+.tg-f { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; padding: 4px; background: var(--plastic); border-radius: 7px; backface-visibility: hidden; }
+.tg-f i { border-radius: 3px; background: #6b717c; }
+@media (max-width: 520px) { .turn-guide { width: 140px; height: 140px; } .tg-cube { --c: 68px; } }
+@media (max-width: 400px) { .instr { grid-template-columns: minmax(0, 1fr); } .turn-guide { justify-self: center; } }
 .tg-f.target { box-shadow: 0 0 0 3px var(--accent); }
 .tg-f.target.unknown i { background: #e7ebf3; }
 .tg-f[data-f="F"] { transform: translateZ(calc(var(--c) / 2)); }
@@ -443,10 +444,11 @@ p.zoom { margin-top: 4px; display: block; }
   function renderGuide() {
     tgFlip.style.transform = `scale(${(video && mirror) ? -1 : 1}, ${(video && mirrorV) ? -1 : 1})`;
     tgCube.querySelectorAll(".tg-f").forEach(el => {
-      const f = el.dataset.f, col = scans[f] ? CANON[scans[f].labels[4]].hex : null;
+      // Every sticker as scanned (stored in standard order, which matches the face layout).
+      const f = el.dataset.f, sc = scans[f];
       el.classList.toggle("target", f === currentFace);
-      el.classList.toggle("unknown", !col);
-      el.querySelectorAll("i").forEach(i => { i.style.background = col || ""; });
+      el.classList.toggle("unknown", !sc);
+      el.querySelectorAll("i").forEach((i, k) => { i.style.background = sc ? CANON[sc.labels[k]].hex : ""; });
     });
     if (tgAnim) { tgAnim.cancel(); tgAnim = null; }
     const end = cssMatrix(ORIENT[currentFace]);
