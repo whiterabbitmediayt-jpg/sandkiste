@@ -101,6 +101,8 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .zoom input { flex: 1; accent-color: var(--accent); }
 #zoomVal { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
 p.zoom { margin-top: 4px; }
+.zoom button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+#mirrorBtn[aria-pressed="true"] { border-color: var(--accent); }
 .camset { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .camset summary { cursor: pointer; font-weight: 600; font-size: 14px; }
 .camset-body { display: grid; gap: 10px; padding-top: 12px; }
@@ -210,6 +212,10 @@ p.zoom { margin-top: 4px; }
         </div>
         <div class="zoom" id="camRow" hidden>
           <label for="camSelect">Kamera</label><select id="camSelect"></select>
+        </div>
+        <div class="zoom" id="orientRow" hidden>
+          <button type="button" id="rotBtn">Bild drehen · 0°</button>
+          <button type="button" id="mirrorBtn" aria-pressed="true">Spiegeln: an</button>
         </div>
         <div class="zoom" id="zoomRow" hidden>
           <label for="zoom">Zoom</label><input id="zoom" type="range" min="1" max="5" step="0.01" value="1">
@@ -511,6 +517,24 @@ p.zoom { margin-top: 4px; }
     saveCamCrop();
   }
   function showZoom(on) { zoomRow.hidden = !on; zoomHint.hidden = !on; }
+
+  // Webcam orientation: rotation fixes a camera that sits upside down or sideways and applies
+  // to both the preview and the scan; mirroring only changes the preview.
+  const ORIENT_KEY = "wuerfel-scanner-webcam-orient";
+  const orientRow = document.getElementById("orientRow"), rotBtn = document.getElementById("rotBtn"), mirrorBtn = document.getElementById("mirrorBtn");
+  let rotation = 0, mirrorPref = null;
+  try {
+    const o = JSON.parse(localStorage.getItem(ORIENT_KEY));
+    if (o) { rotation = [0, 90, 180, 270].includes(o.rot) ? o.rot : 0; mirrorPref = typeof o.mirror === "boolean" ? o.mirror : null; }
+  } catch (e) {}
+  function saveOrient() { try { localStorage.setItem(ORIENT_KEY, JSON.stringify({ rot: rotation, mirror: mirrorPref })); } catch (e) {} }
+  function updateOrientUI() {
+    rotBtn.textContent = `Bild drehen · ${rotation}°`;
+    mirrorBtn.setAttribute("aria-pressed", String(mirror));
+    mirrorBtn.textContent = `Spiegeln: ${mirror ? "an" : "aus"}`;
+  }
+  rotBtn.addEventListener("click", () => { rotation = (rotation + 90) % 360; saveOrient(); updateOrientUI(); });
+  mirrorBtn.addEventListener("click", () => { mirror = !mirror; mirrorPref = mirror; saveOrient(); updateOrientUI(); updateBadge(); });
   const camRow = document.getElementById("camRow"), camSelect = document.getElementById("camSelect");
   const GRID_MARGIN = 0.14;
 
@@ -522,7 +546,7 @@ p.zoom { margin-top: 4px; }
       stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign(base, { width: { ideal: 1920 }, height: { ideal: 1080 }, zoom: true }), audio: false });
       const track = stream.getVideoTracks()[0], settings = track.getSettings ? track.getSettings() : {};
       // Webcams facing the user are shown like a mirror; sampling always reads the unmirrored frame.
-      mirror = settings.facingMode !== "environment";
+      mirror = mirrorPref != null ? mirrorPref : settings.facingMode !== "environment";
       fillCameraList(settings.deviceId);
       video = document.createElement("video");
       video.playsInline = true; video.muted = true; video.srcObject = stream;
@@ -532,6 +556,7 @@ p.zoom { margin-top: 4px; }
       photo = null; camNotice.hidden = true;
       crop = loadCamCrop(); setZoom(crop.zoom); showZoom(true);
       updateBadge();
+      orientRow.hidden = false; updateOrientUI();
       buildCamSettings(track);
       captureBtn.disabled = false;
       document.getElementById("startCam").textContent = "Kamera stoppen";
@@ -539,7 +564,7 @@ p.zoom { margin-top: 4px; }
   }
   function stopCamera() {
     if (stream) stream.getTracks().forEach(t => t.stop());
-    stream = null; video = null; camRow.hidden = true;
+    stream = null; video = null; camRow.hidden = true; orientRow.hidden = true;
     document.getElementById("camSet").hidden = true; document.getElementById("camSetNote").hidden = true;
     if (!photo) showZoom(false);
     document.getElementById("startCam").textContent = "Live-Kamera starten";
@@ -658,8 +683,11 @@ p.zoom { margin-top: 4px; }
     if (!drag || !size) return;
     const s = Math.min(size[0], size[1]) / crop.zoom;
     const k = s / view.getBoundingClientRect().width;
-    // In the mirrored webcam view, dragging right must move the raw crop the other way.
-    crop.ox += (video && mirror ? 1 : -1) * (e.clientX - drag.x) * k; crop.oy -= (e.clientY - drag.y) * k;
+    // Map the screen drag back through mirror and rotation so the picture follows the pointer.
+    let dx = (e.clientX - drag.x) * k; const dy = (e.clientY - drag.y) * k;
+    if (video && mirror) dx = -dx;
+    const t = (video ? rotation : 0) * Math.PI / 180, c = Math.cos(t), sn = Math.sin(t);
+    crop.ox -= dx * c + dy * sn; crop.oy -= -dx * sn + dy * c;
     drag = { x: e.clientX, y: e.clientY };
   });
   view.addEventListener("pointerup", () => { drag = null; saveCamCrop(); });
@@ -676,12 +704,19 @@ p.zoom { margin-top: 4px; }
     crop.oy = Math.max(-(h - s) / 2, Math.min((h - s) / 2, crop.oy));
     return [(w - s) / 2 + crop.ox, (h - s) / 2 + crop.oy, s];
   }
-  function drawSource() {
+  // Draws the square crop into ctx: camera rotation first, then the optional preview mirror.
+  function drawCrop(ctx, S, flipX) {
     const cs = currentSource(); if (!cs) return false;
     const [sx, sy, s] = cropRect(cs.w, cs.h);
-    wctx.drawImage(cs.src, sx, sy, s, s, 0, 0, work.width, work.height);
+    const rot = video ? rotation : 0;
+    ctx.save(); ctx.translate(S / 2, S / 2);
+    if (flipX) ctx.scale(-1, 1);
+    if (rot) ctx.rotate(rot * Math.PI / 180);
+    ctx.drawImage(cs.src, sx, sy, s, s, -S / 2, -S / 2, S, S);
+    ctx.restore();
     return true;
   }
+  function drawSource() { return drawCrop(wctx, work.width, false); }
   function sampleWork() {
     const S = work.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3, box = Math.round(cell * 0.4);
     const rgb = [];
@@ -699,10 +734,8 @@ p.zoom { margin-top: 4px; }
     const S = view.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3, u = S / 480;
     const cs = currentSource();
     if (cs) {
-      const [sx, sy, s] = cropRect(cs.w, cs.h);
       vctx.imageSmoothingQuality = "high";
-      if (video && mirror) { vctx.save(); vctx.translate(S, 0); vctx.scale(-1, 1); vctx.drawImage(cs.src, sx, sy, s, s, 0, 0, S, S); vctx.restore(); }
-      else vctx.drawImage(cs.src, sx, sy, s, s, 0, 0, S, S);
+      drawCrop(vctx, S, !!(video && mirror));
       if (frame++ % 6 === 0) { drawSource(); live = sampleWork().rgb; }
       vctx.fillStyle = "rgba(0,0,0,0.35)";
       vctx.fillRect(0, 0, S, m); vctx.fillRect(0, S - m, S, m); vctx.fillRect(0, m, m, S - 2 * m); vctx.fillRect(S - m, m, m, S - 2 * m);
