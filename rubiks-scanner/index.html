@@ -101,6 +101,14 @@ button:disabled { opacity: .45; cursor: not-allowed; filter: none; }
 .zoom input { flex: 1; accent-color: var(--accent); }
 #zoomVal { font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 4ch; text-align: right; }
 p.zoom { margin-top: 4px; }
+.camset { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.camset summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.camset-body { display: grid; gap: 10px; padding-top: 12px; }
+.ctl { display: grid; grid-template-columns: minmax(0, 9em) minmax(0, 1fr) 4.5em; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
+.ctl input { width: 100%; accent-color: var(--accent); }
+.ctl output { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+.ctl-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.ctl-check input { accent-color: var(--accent); width: 16px; height: 16px; }
 .zoom select { flex: 1; min-width: 0; font: inherit; font-size: 14px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 
 .instr { background: var(--sunken); border-radius: 12px; padding: 16px; display: grid; gap: 8px; }
@@ -192,7 +200,7 @@ p.zoom { margin-top: 4px; }
     <div class="scan-grid">
       <div>
         <div class="viewer" id="viewer">
-          <canvas id="view" width="480" height="480" aria-label="Kamerabild mit Raster"></canvas>
+          <canvas id="view" width="960" height="960" aria-label="Kamerabild mit Raster"></canvas>
           <span class="badge" id="viewBadge">Keine Kamera</span>
         </div>
         <div class="controls">
@@ -208,6 +216,11 @@ p.zoom { margin-top: 4px; }
           <span id="zoomVal">1,0×</span>
         </div>
         <p class="zoom" id="zoomHint" hidden>Mausrad zoomt, Bild ziehen verschiebt den Ausschnitt.</p>
+        <details class="camset" id="camSet" hidden>
+          <summary>Kamera-Einstellungen</summary>
+          <div class="camset-body" id="camSetBody"></div>
+        </details>
+        <p class="zoom" id="camSetNote" hidden>Fokus, Belichtung und Farben der Kamera lassen sich in diesem Browser nicht einstellen. In Chrome oder Chromium erscheinen die Regler hier.</p>
       </div>
       <div class="side">
         <div class="instr" aria-live="polite">
@@ -506,7 +519,7 @@ p.zoom { margin-top: 4px; }
     try {
       if (stream) stream.getTracks().forEach(t => t.stop());
       const base = deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } };
-      stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign(base, { width: { ideal: 1920 }, height: { ideal: 1080 } }), audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: Object.assign(base, { width: { ideal: 1920 }, height: { ideal: 1080 }, zoom: true }), audio: false });
       const track = stream.getVideoTracks()[0], settings = track.getSettings ? track.getSettings() : {};
       // Webcams facing the user are shown like a mirror; sampling always reads the unmirrored frame.
       mirror = settings.facingMode !== "environment";
@@ -514,9 +527,12 @@ p.zoom { margin-top: 4px; }
       video = document.createElement("video");
       video.playsInline = true; video.muted = true; video.srcObject = stream;
       await video.play();
+      await ensureResolution(track);
+      video.addEventListener("resize", updateBadge);
       photo = null; camNotice.hidden = true;
       crop = loadCamCrop(); setZoom(crop.zoom); showZoom(true);
-      badge.textContent = mirror ? "Live · gespiegelt" : "Live";
+      updateBadge();
+      buildCamSettings(track);
       captureBtn.disabled = false;
       document.getElementById("startCam").textContent = "Kamera stoppen";
     } catch (e) { camFail(); }
@@ -524,10 +540,75 @@ p.zoom { margin-top: 4px; }
   function stopCamera() {
     if (stream) stream.getTracks().forEach(t => t.stop());
     stream = null; video = null; camRow.hidden = true;
+    document.getElementById("camSet").hidden = true; document.getElementById("camSetNote").hidden = true;
     if (!photo) showZoom(false);
     document.getElementById("startCam").textContent = "Live-Kamera starten";
     if (!photo) { badge.textContent = "Keine Kamera"; captureBtn.disabled = true; }
   }
+  function updateBadge() {
+    if (!video) return;
+    badge.textContent = `Live · ${video.videoWidth}×${video.videoHeight}` + (mirror ? " · gespiegelt" : "");
+  }
+  // Some browsers start low; ask for HD explicitly if the first frame is small.
+  async function ensureResolution(track) {
+    if (video.videoWidth >= 1280) return;
+    for (const [w, h] of [[1920, 1080], [1280, 720]]) {
+      try { await track.applyConstraints({ width: { exact: w }, height: { exact: h } }); await new Promise(r => setTimeout(r, 300)); return; } catch (e) {}
+    }
+  }
+
+  // Hardware controls the browser exposes for this camera (Chromium on most UVC webcams).
+  const CTL = [
+    { key: "zoom", label: "Kamera-Zoom" },
+    { key: "focusDistance", label: "Fokus", mode: "focusMode" },
+    { key: "exposureCompensation", label: "Belichtung" },
+    { key: "exposureTime", label: "Belichtungszeit", mode: "exposureMode" },
+    { key: "brightness", label: "Helligkeit" },
+    { key: "contrast", label: "Kontrast" },
+    { key: "saturation", label: "Farbsättigung" },
+    { key: "sharpness", label: "Schärfe" },
+    { key: "colorTemperature", label: "Farbtemperatur", mode: "whiteBalanceMode" },
+  ];
+  const AUTO = [["focusMode", "Autofokus"], ["exposureMode", "Automatische Belichtung"], ["whiteBalanceMode", "Automatischer Weißabgleich"]];
+  function buildCamSettings(track) {
+    const body = document.getElementById("camSetBody"), box = document.getElementById("camSet"), note = document.getElementById("camSetNote");
+    body.innerHTML = ""; let n = 0;
+    let caps = {}; try { caps = track.getCapabilities ? track.getCapabilities() : {}; } catch (e) {}
+    const st = track.getSettings ? track.getSettings() : {};
+    const apply = async cons => { try { await track.applyConstraints({ advanced: [cons] }); } catch (e) {} };
+    const autoBoxes = {};
+    AUTO.forEach(([k, label]) => {
+      const modes = caps[k];
+      if (!Array.isArray(modes) || !modes.includes("manual")) return;
+      const autoVal = modes.includes("continuous") ? "continuous" : modes.includes("single-shot") ? "single-shot" : null;
+      if (!autoVal) return;
+      const row = document.createElement("label"); row.className = "ctl-check";
+      const cb = document.createElement("input"); cb.type = "checkbox"; cb.id = "cs-" + k; cb.checked = st[k] !== "manual";
+      cb.addEventListener("change", () => apply({ [k]: cb.checked ? autoVal : "manual" }));
+      row.append(cb, document.createTextNode(label)); body.appendChild(row); autoBoxes[k] = cb; n++;
+    });
+    CTL.forEach(c => {
+      const cap = caps[c.key];
+      if (!cap || typeof cap.max !== "number" || !(cap.max > cap.min)) return;
+      const row = document.createElement("div"); row.className = "ctl";
+      const lab = document.createElement("label"); lab.htmlFor = "cs-" + c.key; lab.textContent = c.label;
+      const inp = document.createElement("input"); inp.type = "range"; inp.id = "cs-" + c.key;
+      inp.min = cap.min; inp.max = cap.max; inp.step = cap.step || (cap.max - cap.min) / 100;
+      inp.value = st[c.key] != null ? st[c.key] : cap.min;
+      const out = document.createElement("output");
+      const fmt = () => { const v = +inp.value; out.textContent = Number.isInteger(+inp.step) ? String(Math.round(v)) : v.toFixed(2); };
+      fmt();
+      inp.addEventListener("input", () => {
+        fmt();
+        const cons = { [c.key]: +inp.value };
+        if (c.mode && autoBoxes[c.mode]) { cons[c.mode] = "manual"; autoBoxes[c.mode].checked = false; }
+        apply(cons);
+      });
+      row.append(lab, inp, out); body.appendChild(row); n++;
+    });
+    box.hidden = n === 0; note.hidden = n > 0;
+  }
+
   async function fillCameraList(activeId) {
     try {
       const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput");
@@ -584,15 +665,21 @@ p.zoom { margin-top: 4px; }
   view.addEventListener("pointerup", () => { drag = null; saveCamCrop(); });
   view.addEventListener("pointercancel", () => { drag = null; });
 
-  function drawSource() {
-    const S = work.width;
-    const src = (video && video.readyState >= 2) ? video : photo ? photo.img : null;
-    if (!src) return false;
-    const [w, h] = video ? [video.videoWidth, video.videoHeight] : [src.width, src.height];
+  function currentSource() {
+    if (video && video.readyState >= 2) return { src: video, w: video.videoWidth, h: video.videoHeight };
+    if (photo) return { src: photo.img, w: photo.img.width, h: photo.img.height };
+    return null;
+  }
+  function cropRect(w, h) {
     const s = Math.min(w, h) / crop.zoom;
     crop.ox = Math.max(-(w - s) / 2, Math.min((w - s) / 2, crop.ox));
     crop.oy = Math.max(-(h - s) / 2, Math.min((h - s) / 2, crop.oy));
-    wctx.drawImage(src, (w - s) / 2 + crop.ox, (h - s) / 2 + crop.oy, s, s, 0, 0, S, S);
+    return [(w - s) / 2 + crop.ox, (h - s) / 2 + crop.oy, s];
+  }
+  function drawSource() {
+    const cs = currentSource(); if (!cs) return false;
+    const [sx, sy, s] = cropRect(cs.w, cs.h);
+    wctx.drawImage(cs.src, sx, sy, s, s, 0, 0, work.width, work.height);
     return true;
   }
   function sampleWork() {
@@ -609,31 +696,32 @@ p.zoom { margin-top: 4px; }
     return { rgb, lab: rgb.map(rgb2lab) };
   }
   function render() {
-    const S = view.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3;
-    const has = drawSource();
-    if (has) {
-      const flip = !!(video && mirror);
-      if (flip) { vctx.save(); vctx.translate(S, 0); vctx.scale(-1, 1); vctx.drawImage(work, 0, 0); vctx.restore(); }
-      else vctx.drawImage(work, 0, 0);
-      if (frame++ % 6 === 0) live = sampleWork().rgb;
+    const S = view.width, m = S * GRID_MARGIN, cell = (S - 2 * m) / 3, u = S / 480;
+    const cs = currentSource();
+    if (cs) {
+      const [sx, sy, s] = cropRect(cs.w, cs.h);
+      vctx.imageSmoothingQuality = "high";
+      if (video && mirror) { vctx.save(); vctx.translate(S, 0); vctx.scale(-1, 1); vctx.drawImage(cs.src, sx, sy, s, s, 0, 0, S, S); vctx.restore(); }
+      else vctx.drawImage(cs.src, sx, sy, s, s, 0, 0, S, S);
+      if (frame++ % 6 === 0) { drawSource(); live = sampleWork().rgb; }
       vctx.fillStyle = "rgba(0,0,0,0.35)";
       vctx.fillRect(0, 0, S, m); vctx.fillRect(0, S - m, S, m); vctx.fillRect(0, m, m, S - 2 * m); vctx.fillRect(S - m, m, m, S - 2 * m);
     } else {
       vctx.fillStyle = "#16181d"; vctx.fillRect(0, 0, S, S);
-      vctx.fillStyle = "#8a93a0"; vctx.font = "600 18px 'IBM Plex Sans', sans-serif"; vctx.textAlign = "center";
-      vctx.fillText("Kamera starten oder Foto aufnehmen", S / 2, S - m / 2 + 6);
+      vctx.fillStyle = "#8a93a0"; vctx.font = `600 ${18 * u}px 'IBM Plex Sans', sans-serif`; vctx.textAlign = "center";
+      vctx.fillText("Kamera starten oder Foto aufnehmen", S / 2, S - m / 2 + 6 * u);
       live = [];
     }
-    vctx.strokeStyle = "rgba(255,255,255,0.9)"; vctx.lineWidth = 3;
+    vctx.strokeStyle = "rgba(255,255,255,0.9)"; vctx.lineWidth = 3 * u;
     for (let i = 0; i <= 3; i++) {
       vctx.beginPath(); vctx.moveTo(m + i * cell, m); vctx.lineTo(m + i * cell, S - m); vctx.stroke();
       vctx.beginPath(); vctx.moveTo(m, m + i * cell); vctx.lineTo(S - m, m + i * cell); vctx.stroke();
     }
     if (live.length) live.forEach((c, i) => {
       const col = (video && mirror) ? 2 - (i % 3) : i % 3;
-      const x = m + col * cell + cell - 26, y = m + Math.floor(i / 3) * cell + 8;
-      vctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; vctx.fillRect(x, y, 18, 18);
-      vctx.strokeStyle = "#fff"; vctx.lineWidth = 2; vctx.strokeRect(x, y, 18, 18);
+      const x = m + col * cell + cell - 26 * u, y = m + Math.floor(i / 3) * cell + 8 * u, q = 18 * u;
+      vctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; vctx.fillRect(x, y, q, q);
+      vctx.strokeStyle = "#fff"; vctx.lineWidth = 2 * u; vctx.strokeRect(x, y, q, q);
     });
     requestAnimationFrame(render);
   }
